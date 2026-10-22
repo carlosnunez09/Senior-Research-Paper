@@ -1,0 +1,112 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{float}
+\usepackage{pgfplots}
+\usepgfplotslibrary{groupplots,fillbetween}
+\pgfplotsset{compat=1.18}
+
+% Hold test figures. Data files read from data/finalhold_<backend>_<target>.csv
+% (made by make_plot_data.py). Column minute_rel = minutes relative to the start of the hold;
+% the grey rectangles shade the ramp-up (minute_rel < 0).
+
+\begin{document}
+
+\begin{figure}[!htbp]
+\centering
+{\bfseries\small Test 2: hold at 300 clients, ramp-up then 20-minute hold (mean of 8 runs)\par}\vspace{4pt}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 2,horizontal sep=1.7cm,vertical sep=2.2cm},
+  width=0.5\textwidth,height=5cm,xlabel={minutes (0 = hold starts)},xmin=-8,xmax=20,
+  tick label style={font=\scriptsize},label style={font=\footnotesize},
+  title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25}]
+\nextgroupplot[title={Latency (ping)},ylabel={ms},ymin=2,ymax=6000,ymode=log]
+\fill[gray!18] (axis cs:-8,2) rectangle (axis cs:0,6000);
+\addplot[name path=pingca,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_min]{data/finalhold_cpp_300.csv};
+\addplot[name path=pingcb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_max]{data/finalhold_cpp_300.csv};
+\addplot[blue!30,opacity=0.6,forget plot] fill between[of=pingca and pingcb];
+\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=ping_mean]{data/finalhold_cpp_300.csv};
+\addplot[name path=pingea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_min]{data/finalhold_enet_300.csv};
+\addplot[name path=pingeb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_max]{data/finalhold_enet_300.csv};
+\addplot[red!30,opacity=0.6,forget plot] fill between[of=pingea and pingeb];
+\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=ping_mean]{data/finalhold_enet_300.csv};
+\nextgroupplot[title={Packet handling},ylabel={snapshots/s per client},ymin=0,ymax=24]
+\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,24);
+\addplot[name path=recvca,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_min]{data/finalhold_cpp_300.csv};
+\addplot[name path=recvcb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_max]{data/finalhold_cpp_300.csv};
+\addplot[blue!30,opacity=0.6,forget plot] fill between[of=recvca and recvcb];
+\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=recv_mean]{data/finalhold_cpp_300.csv};
+\addplot[name path=recvea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_min]{data/finalhold_enet_300.csv};
+\addplot[name path=recveb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_max]{data/finalhold_enet_300.csv};
+\addplot[red!30,opacity=0.6,forget plot] fill between[of=recvea and recveb];
+\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=recv_mean]{data/finalhold_enet_300.csv};
+\addplot[black,dashed,domain=-8:20,samples=2]{20};
+\nextgroupplot[title={Clients responding},ylabel={\% of connected},ymin=0,ymax=105]
+\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
+\addplot[name path=responding_pctca,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_cpp_300.csv};
+\addplot[name path=responding_pctcb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_cpp_300.csv};
+\addplot[blue!30,opacity=0.6,forget plot] fill between[of=responding_pctca and responding_pctcb];
+\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_300.csv};
+\addplot[name path=responding_pctea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_300.csv};
+\addplot[name path=responding_pcteb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_300.csv};
+\addplot[red!30,opacity=0.6,forget plot] fill between[of=responding_pctea and responding_pcteb];
+\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_300.csv};
+\nextgroupplot[title={Server tick rate},ylabel={Hz},ymin=15,ymax=21]
+\fill[gray!18] (axis cs:-8,15) rectangle (axis cs:0,21);
+\addplot[name path=tickca,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_min]{data/finalhold_cpp_300.csv};
+\addplot[name path=tickcb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_max]{data/finalhold_cpp_300.csv};
+\addplot[blue!30,opacity=0.6,forget plot] fill between[of=tickca and tickcb];
+\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=tick_mean]{data/finalhold_cpp_300.csv};
+\addplot[name path=tickea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_min]{data/finalhold_enet_300.csv};
+\addplot[name path=tickeb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_max]{data/finalhold_enet_300.csv};
+\addplot[red!30,opacity=0.6,forget plot] fill between[of=tickea and tickeb];
+\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=tick_mean]{data/finalhold_enet_300.csv};
+\addplot[black,dashed,domain=-8:20,samples=2]{18};
+\end{groupplot}
+\node[anchor=north] at (\linewidth/2-3.5cm,-9.0cm) {\footnotesize \textcolor{blue!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} C++ UDP \quad \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} Godot ENet \quad shaded band: lowest to highest run};
+\end{tikzpicture}
+\caption{Test 2, hold at 300 clients, one point per 10~s. Each line is the mean of 8 runs and the band spans the lowest to the highest run. Grey: clients being added (ramp-up and a short wait before the hold). White: the 20-minute hold. Dashed lines: 20 snapshots per second and the 18~Hz threshold. ENet latency is the game client's logged ping; C++ latency is a raw round trip, so the two are not directly comparable .}
+\label{fig:hold300}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+{\bfseries\small Test 2: hold test at every target, share of clients responding (mean of 8 runs)\par}\vspace{4pt}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 2,horizontal sep=1.7cm,vertical sep=1.9cm},
+  width=0.5\textwidth,height=4.3cm,xlabel={minutes (0 = hold starts)},xmin=-8,xmax=20,
+  ymin=0,ymax=105,ylabel={\% responding},
+  tick label style={font=\scriptsize},label style={font=\footnotesize},
+  title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25},
+  legend style={font=\tiny,at={(1.02,0.5)},anchor=west}]
+\nextgroupplot[title={C++ UDP, all four targets}]
+\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
+\addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_180.csv};
+\addplot[blue!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_260.csv};
+\addplot[green!50!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_270.csv};
+\addplot[orange!85!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_300.csv};
+\nextgroupplot[title={Godot ENet, 260 clients}]
+\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
+\addplot[name path=e260a,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_260.csv};
+\addplot[name path=e260b,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_260.csv};
+\addplot[red!30,opacity=0.6,forget plot] fill between[of=e260a and e260b];
+\addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_260.csv};
+\nextgroupplot[title={Godot ENet, 270 clients}]
+\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
+\addplot[name path=e270a,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_270.csv};
+\addplot[name path=e270b,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_270.csv};
+\addplot[red!30,opacity=0.6,forget plot] fill between[of=e270a and e270b];
+\addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_270.csv};
+\nextgroupplot[title={Godot ENet, 300 clients}]
+\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
+\addplot[name path=e300a,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_300.csv};
+\addplot[name path=e300b,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_300.csv};
+\addplot[red!30,opacity=0.6,forget plot] fill between[of=e300a and e300b];
+\addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_300.csv};
+\end{groupplot}
+\end{tikzpicture}
+\caption{Test 2, share of clients responding during the hold at every target (mean of 8 runs). Grey: ramp-up. Top left: C++ UDP at 180, 260, 270 and 300 clients stays at 100\% (all four lines overlap). The other panels show Godot ENet at 260, 270 and 300 clients; the line is the mean of 8 runs and the red band spans the lowest to the highest run. ENet at 180 clients also stays at 100\% in all 8 runs and is not shown.}
+\label{fig:holdall}
+\end{figure}
+
+\end{document}
