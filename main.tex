@@ -32,16 +32,12 @@ in which every client is a bot that moves one tile per 20~Hz server tick. Both s
 Google Cloud with one server VM and three client VMs. Two tests are used: a progressive
 ladder that adds clients from 1 to 300, run eight times per backend, and a 20-minute hold at fixed loads of 180 to 300
 clients. We measure latency, packet handling (snapshots received per client per second), client limit, and server
-tick rate. Across the eight ladder runs the C++ server passed all 292 states every time, with a round-trip time near 6~ms.
-ENet passed at 100 and 150 clients in all eight runs, at 200 clients in three of eight, and at 250 clients in none; its first
-failure came between 170 and 188 clients in every run, with ping and lost snapshots growing beyond that. In the 20-minute
-holds, C++ kept every client responding at 180, 260, 270 and 300 clients in all eight runs, with ping near 6~ms. ENet held 180 clients in all
-eight runs, but held 260 and 270 clients in only one run each and 300 clients in none; at 300 clients about 75\% of its clients responded and
-ping was near 1.4~s. ENet's server tick rate stayed near 20~Hz throughout, so tick rate alone did not reveal its overload.
-Both tests are the mean of eight complete runs per backend.
+tick rate. TODO: write the results sentences from the granular ladder runs (the hold tests are still to be run).
 \end{abstract}
 
 \noindent\textbf{Keywords:} game networking, UDP, ENet, Godot, tick rate, server capacity, benchmarking
+
+\noindent\colorbox{red!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textbf{Draft note.} The ladder results in Section~\ref{sec:ladder} are the eight runs of the new granular batch (both patches applied, larger client VMs). The abstract and the hold results are still from the first round of runs (\textbf{superseded}); the hold tests have not been rerun yet. See Section~\ref{sec:fixes} for the two comparability problems that were fixed.}}
 
 \section{Introduction}
 TODO: write the introduction (problem, what this paper does, the questions).
@@ -97,27 +93,29 @@ Effective tick rate & Ticks the server actually completes per second. Healthy $\
 \end{scope}
 
 \begin{scope}[yshift=-5.2cm]
-\node[anchor=west] at (0,1.55) {\textbf{C. Overloaded: work 80 ms exceeds the 50 ms budget}};
+\node[anchor=west] at (0,1.55) {\textbf{C. Overloaded: work needs 80 ms, a tick lasts 50 ms}};
 \foreach \t in {0,50,...,250} {\draw[dl] (\t,-0.15) -- (\t,1.1);}
 \draw[->] (0,0) -- (262,0) node[right]{ms};
-\foreach \t in {0,80,160} {
-  \filldraw[late] (\t,0) rectangle (\t+80,0.6);
-  \draw[snap] (\t+80,0.6) -- (\t+80,1.05);}
-\foreach \t in {50,100,150,200} {\node[red!70!black] at (\t,-0.45) {\textbf{x}};}
+\foreach \t in {0,50,...,200} {
+  \filldraw[late] (\t,0) rectangle (\t+50,0.6);
+  \draw[snap] (\t+50,0.6) -- (\t+50,1.05);}
+\foreach \t in {50,100,...,250} {\node[red!70!black] at (\t,-0.45) {\textbf{x}};}
 \end{scope}
 
 \begin{scope}[yshift=-7.2cm]
 \draw[dl] (0,0.2) -- (12,0.2); \node[anchor=west] at (14,0.2) {deadline};
 \filldraw[work] (62,0.05) rectangle (74,0.35); \node[anchor=west] at (77,0.2) {receive, simulate, send};
 \draw[snap] (170,0.0) -- (170,0.45); \node[anchor=west] at (174,0.2) {snapshot sent};
-\node[red!70!black] at (232,0.2) {\textbf{x}}; \node[anchor=west] at (237,0.2) {deadline missed};
+\node[red!70!black] at (222,0.2) {\textbf{x}}; \node[anchor=west] at (227,0.2) {work unfinished};
 \end{scope}
 \end{tikzpicture}
 \caption{Schematic of a server tick (illustrative timings, not measured data).
 Each tick the server receives client input, updates the world, and sends a
 snapshot; at 20~Hz it has 50~ms for all of it. If the work per tick grows with
-the number of clients and passes 50~ms, ticks start late, the effective tick rate
-falls ($1000/80=12.5$~Hz in panel~C) and clients get fewer, later snapshots.}
+the number of clients and passes 50~ms (panel~C), the snapshot still leaves at the
+50~ms deadline, because the next tick's work has to start. The tick rate therefore
+stays near 20~Hz, but the work is unfinished, so the snapshots carry less up-to-date
+information and clients see worse ping and more gaps.}
 \label{fig:tickvisual}
 \end{figure}
 
@@ -152,6 +150,214 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \caption{The Godot project. One script is started in different modes. A UDP client talks to the separate C++ server; an ENet client talks to the same project started as an ENet server.}
 \end{figure}
 
+\definecolor{nsbg}{RGB}{72,72,72}
+\definecolor{nsgrid}{RGB}{56,56,56}
+\definecolor{nspink}{RGB}{235,60,150}
+\definecolor{nsyellow}{RGB}{235,212,59}
+\definecolor{nscyan}{RGB}{59,205,235}
+\newcommand{\nsboard}[1]{% #1 = status text
+  \fill[nsbg,rounded corners=2pt] (-0.3,1.0) rectangle (9.1,-9.1);
+  \node[white,font=\scriptsize,anchor=west] at (-0.1,0.6) {NodeStrike (DEBUG)};
+  \node[white,font=\scriptsize,anchor=east] at (8.9,0.6) {#1};
+  \draw[nsgrid,line width=0.3pt] (0,0) grid[step=0.44] (8.8,-8.8);
+}
+\newcommand{\nsplayer}[4]{% col,row,color,label : filled square
+  \fill[#3] ({#1*0.44+0.07},{-#2*0.44-0.07}) rectangle ({#1*0.44+0.37},{-#2*0.44-0.37});
+  \node[white,font=\tiny,anchor=south west,inner sep=0.2pt] at ({#1*0.44+0.05},{-#2*0.44-0.38}) {#4};
+}
+\newcommand{\nsgoal}[3]{% col,row,color : hollow square
+  \draw[#3,line width=0.8pt] ({#1*0.44+0.07},{-#2*0.44-0.07}) rectangle ({#1*0.44+0.37},{-#2*0.44-0.37});
+}
+\newcommand{\nsme}[4]{% col,row,color,label : my square with white outline
+  \fill[#3] ({#1*0.44+0.07},{-#2*0.44-0.07}) rectangle ({#1*0.44+0.37},{-#2*0.44-0.37});
+  \draw[white,line width=0.9pt] ({#1*0.44+0.07},{-#2*0.44-0.07}) rectangle ({#1*0.44+0.37},{-#2*0.44-0.37});
+  \node[white,font=\tiny,anchor=south west,inner sep=0.2pt] at ({#1*0.44+0.05},{-#2*0.44-0.38}) {#4};
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.8,transform shape,font=\footnotesize,
+  note/.style={draw,rounded corners=3pt,fill=blue!6,align=left,inner sep=4pt},
+  arr/.style={-{Stealth},thick,blue!60!black}]
+\begin{scope}
+\nsboard{Connected --- Player \#5}
+\nsme{19}{19}{nspink}{5}
+\nsgoal{18}{1}{white}
+\end{scope}
+\node[note,anchor=west] (n1) at (10.6,0.0) {\textbf{1. Connected.} The client has its\\ player number (\#5) and its\\ spawn corner.};
+\node[note,anchor=west] (n3) at (10.6,-2.6) {\textbf{2. Your goal.} The white hollow\\ square is the tile the bot walks to.};
+\node[note,anchor=west] (n2) at (10.6,-7.0) {\textbf{3. Your square.} Filled, with a\\ white outline and your number.\\ It starts alone in a corner.};
+\draw[arr] (n1.west) -- (7.9,0.6);
+\draw[arr] (n3.west) -- (8.4,-0.75);
+\draw[arr] (n2.west) -- (8.8,-8.4);
+\end{tikzpicture}
+\caption{The Godot client the moment it joins (a redrawing of the NodeStrike window). The board is the 20×20 grid; the only player in view is the client's own.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.8,transform shape,font=\footnotesize,
+  note/.style={draw,rounded corners=3pt,fill=blue!6,align=left,inner sep=4pt},
+  arr/.style={-{Stealth},thick,blue!60!black}]
+\begin{scope}
+\nsboard{Connected --- Player \#5}
+% other players and their goals
+\nsplayer{15}{15}{nsyellow}{3}
+\nsgoal{9}{10}{nsyellow!60!white}
+\nsplayer{11}{18}{nscyan}{4}
+\nsgoal{9}{19}{nscyan!60!white}
+% me
+\nsgoal{18}{1}{white}
+\nsme{12}{8}{nspink}{5}
+\end{scope}
+\node[note,anchor=west] (a) at (10.6,0.0) {\textbf{Status line.} Shows the\\ client's player number.};
+\node[note,anchor=west] (b) at (10.6,-1.8) {\textbf{Your goal.} White hollow\\ square.};
+\node[note,anchor=west] (c) at (10.6,-3.7) {\textbf{You.} Filled square with a\\ white outline and your number.};
+\node[note,anchor=west] (e) at (10.6,-5.6) {\textbf{That player's goal.} Pale\\ hollow square, same colour.};
+\node[note,anchor=west] (d) at (10.6,-7.6) {\textbf{Another player.} Filled\\ square with its number (3, 4).\\ Each client has its own colour.};
+\draw[arr] (a.west) -- (7.9,0.6);
+\draw[arr] (b.west) -- (8.4,-0.75);
+\draw[arr] (c.west) -- (5.75,-3.74);
+\draw[arr] (e.west) -- (4.4,-4.62);
+\draw[arr] (d.west) -- (7.05,-6.82);
+\end{tikzpicture}
+\caption{The running NodeStrike client (redrawn from a screenshot of a client started in a window; headless benchmark clients draw nothing). Each tick every bot moves one tile toward its goal. The server's snapshot tells each client where every other player is; the client only draws it. Each player's pale hollow square is that player's goal.}
+\end{figure}
+
+\newcommand{\nsmini}{% small board, no header
+  \fill[nsbg,rounded corners=1pt] (-0.1,0.1) rectangle (4.5,-4.5);
+  \draw[nsgrid,line width=0.2pt] (0,0) grid[step=0.22] (4.4,-4.4);
+}
+\newcommand{\nsminisq}[3]{% col,row,color
+  \fill[#3] ({#1*0.22+0.03},{-#2*0.22-0.03}) rectangle ({#1*0.22+0.19},{-#2*0.22-0.19});
+}
+\newcommand{\nsminigoal}[3]{%
+  \draw[#3,line width=0.5pt] ({#1*0.22+0.03},{-#2*0.22-0.03}) rectangle ({#1*0.22+0.19},{-#2*0.22-0.19});
+}
+\newcommand{\nsminime}[3]{%
+  \fill[#3] ({#1*0.22+0.03},{-#2*0.22-0.03}) rectangle ({#1*0.22+0.19},{-#2*0.22-0.19});
+  \draw[white,line width=0.6pt] ({#1*0.22+0.03},{-#2*0.22-0.03}) rectangle ({#1*0.22+0.19},{-#2*0.22-0.19});
+}
+\newcommand{\nsworld}[1]{% the three players; #1 = code to draw "me" outline or plain
+  \nsminisq{15}{15}{nsyellow}\nsminigoal{9}{10}{nsyellow!60!white}
+  \nsminisq{11}{18}{nscyan}\nsminigoal{9}{19}{nscyan!60!white}
+  \nsminigoal{18}{1}{#1}
+}
+\newcommand{\nstable}[1]{%
+  \begin{tabular}{@{}rrrrr@{}}
+  \textbf{id} & \textbf{x} & \textbf{y} & \textbf{gx} & \textbf{gy}\\
+  \textcolor{nsyellow!70!black}{3} & 15 & 15 & 9 & 10\\
+  \textcolor{nscyan!70!black}{4} & 11 & 18 & 9 & 19\\
+  \textcolor{nspink}{5} & 12 & 8 & 18 & 1\\
+  \end{tabular}}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\footnotesize,
+  big/.style={-{Stealth},line width=1.4pt,orange!70!black},
+  box/.style={draw,rounded corners=3pt,align=center,inner sep=4pt,fill=blue!6}]
+% server board (left)
+\begin{scope}[shift={(0,0)}]
+\nsmini \nsworld{nspink!60!white}
+\nsminisq{12}{8}{nspink}
+\end{scope}
+% client board (right)
+\begin{scope}[shift={(10.6,0)}]
+\nsmini \nsworld{white}
+\nsminime{12}{8}{nspink}
+\end{scope}
+\node[font=\footnotesize\bfseries] at (2.2,0.55) {Server: its player table};
+\node[font=\footnotesize\bfseries] at (12.8,0.55) {Client: what the player sees};
+% arrows between
+\draw[big] (4.8,-1.2) -- (10.2,-1.2);
+\node[box,fill=orange!10] at (7.5,-0.45) {\scriptsize 20 snapshots per second};
+\node[box,fill=orange!10] at (7.5,-1.95) {\scriptsize\textbf{pack}: table $\rightarrow$ bytes\\[-1pt]\scriptsize (16 + 12$N$ bytes)};
+\draw[big] (10.2,-3.4) -- (4.8,-3.4);
+\node[box,fill=green!10] at (7.5,-2.9) {\scriptsize\textbf{unpack}: bytes $\rightarrow$ table};
+\node[box,fill=green!10] at (7.5,-4.1) {\scriptsize 20 own positions per second\\[-1pt]\scriptsize (\texttt{submit\_state})};
+% tables
+\node[anchor=north] (t1) at (2.2,-4.95) {\nstable{}};
+\node[anchor=north] (t2) at (12.8,-4.95) {\nstable{}};
+\node[font=\scriptsize\ttfamily] at (2.2,-4.75) {remote\_players (Dictionary)};
+\node[font=\scriptsize\ttfamily] at (12.8,-4.75) {remote\_players (Dictionary)};
+\node[font=\Large\bfseries] at (7.5,-6.0) {=};
+\node[font=\scriptsize,align=center] at (7.5,-6.6) {same rows,\\ same tick};
+\end{tikzpicture}
+\caption{Server and client side by side (redrawn). The server keeps every player in a table (a Godot Dictionary, id $\rightarrow$ position and goal). Every tick it packs the table into bytes and sends it. Each client unpacks the bytes into its own table of the same name and draws it, so the two screens show the same players and follow each other, about one network trip apart. The client's only extra is the white outline on its own square. Going the other way, each client sends only its own row.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.78cm,y=1cm,font=\footnotesize,
+  cell/.style={draw,minimum height=0.8cm,inner sep=0pt,align=center,font=\scriptsize}]
+% ruler
+\foreach \i in {0,...,15} {\node[font=\tiny,gray] at (\i+0.5,0.35) {\i};}
+\node[font=\scriptsize,anchor=east] at (-0.2,0.35) {byte};
+% header row
+\node[font=\scriptsize\bfseries,anchor=east] at (-0.2,-0.4) {header};
+\node[cell,fill=blue!12,minimum width=3.12cm] at (2,-0.4) {tick number\\\texttt{u32}};
+\node[cell,fill=blue!12,minimum width=1.56cm] at (5,-0.4) {players\\\texttt{u16}};
+\node[cell,fill=blue!12,minimum width=0.78cm,font=\tiny] at (6.5,-0.4) {H\\\texttt{u8}};
+\node[cell,fill=blue!12,minimum width=0.78cm,font=\tiny] at (7.5,-0.4) {ver\\\texttt{u8}};
+\node[cell,fill=gray!15,minimum width=6.24cm] at (12,-0.4) {reserved, all zero (padding to 16 bytes)};
+% one player row
+\node[font=\scriptsize\bfseries,anchor=east,align=right] at (-0.2,-1.7) {one player\\(12 bytes)};
+\node[cell,fill=yellow!25,minimum width=3.12cm] at (2,-1.7) {player id\\\texttt{u32}};
+\node[cell,fill=green!15,minimum width=1.56cm] at (5,-1.7) {x\\\texttt{u16}};
+\node[cell,fill=green!15,minimum width=1.56cm] at (7,-1.7) {y\\\texttt{u16}};
+\node[cell,fill=orange!15,minimum width=1.56cm] at (9,-1.7) {goal x\\\texttt{u16}};
+\node[cell,fill=orange!15,minimum width=1.56cm] at (11,-1.7) {goal y\\\texttt{u16}};
+\node[font=\scriptsize,anchor=west] at (12.1,-1.7) {$\times N$, back to back};
+% example values
+\node[font=\scriptsize,anchor=east,align=right] at (-0.2,-2.9) {example\\player 3};
+\foreach \x/\v in {5/15,7/15,9/9,11/10} {\node[cell,minimum width=1.56cm,fill=white] at (\x,-2.9) {\v};}
+\node[cell,minimum width=3.12cm,fill=white] at (2,-2.9) {3};
+\node[font=\scriptsize,anchor=west] at (12.1,-2.9) {(tile 15,15; goal 9,10)};
+% size summary
+\node[font=\scriptsize,anchor=north west,text width=15.5cm] at (-1.4,-3.5)
+ {Size of the snapshot: $16 + 12N$ bytes. 3 players: 52 bytes. 300 players: 3\,616 bytes. ENet splits a packet that does not fit one datagram by itself; the C++ server splits at 1\,200 bytes.};
+\node[font=\scriptsize\bfseries,anchor=west] at (-1.4,-4.9) {What goes on the wire for one snapshot:};
+\node[cell,fill=gray!20,minimum width=1.7cm] at (1.09,-5.7) {IP header\\20 B};
+\node[cell,fill=gray!20,minimum width=1.6cm] at (3.21,-5.7) {UDP header\\8 B};
+\node[cell,fill=red!10,minimum width=2.6cm] at (5.9,-5.7) {ENet header};
+\node[cell,fill=red!10,minimum width=3.0cm] at (9.49,-5.7) {Godot RPC header};
+\node[cell,fill=blue!12,minimum width=3.6cm] at (14.1,-5.7) {snapshot: $16 + 12N$ B};
+\node[font=\scriptsize,gray,anchor=north west,text width=15.5cm] at (-1.4,-6.3) {The ENet and Godot header sizes are not measured here. The C++ server sends the same snapshot with its own 16-byte header directly after UDP.};
+\end{tikzpicture}
+\caption{How one snapshot is packed (ENet backend, default binary format). The server writes the header and then one 12-byte block per player into one byte array with \texttt{encode\_u32}/\texttt{encode\_u16} and sends it as a remote procedure call. The client reads the same positions back with \texttt{decode\_u32}/\texttt{decode\_u16}. The alternative \texttt{--enet-snapshot=variant} sends the same rows as a list of dictionaries, with the keys \texttt{id, x, y, gx, gy} sent as text each time.}
+\end{figure}
+
+\newcommand{\draftmark}{\textcolor{red!70!black}{\textbf{[DRAFT]}}}
+
+\noindent\textbf{\draftmark{} The snapshot code.}\par\nobreak
+\begin{figure}[H]
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+func _broadcast_binary_enet_tick() -> void:
+    var player_ids := remote_players.keys()
+    var player_count := mini(player_ids.size(), 0xffff)
+    var packet := PackedByteArray()
+    packet.resize(16 + player_count * 12)
+    packet.encode_u32(0, tick_count)        # bytes 0-3: tick number
+    packet.encode_u16(4, player_count)      # bytes 4-5: players
+    packet[6] = 1 if h_overlay_active else 0
+    packet[7] = ENET_SNAPSHOT_VERSION       # byte 7: version
+    for i in range(player_count):           # bytes 8-15 stay 0
+        var pid := int(player_ids[i])
+        var player: Dictionary = remote_players[pid]
+        var offset := 16 + i * 12
+        packet.encode_u32(offset, pid)
+        packet.encode_u16(offset + 4, int(player.get("x", 0)))
+        packet.encode_u16(offset + 6, int(player.get("y", 0)))
+        packet.encode_u16(offset + 8, int(player.get("gx", 0)))
+        packet.encode_u16(offset + 10, int(player.get("gy", 0)))
+    rpc("receive_binary_snapshot", packet)
+\end{lstlisting}
+\caption{\draftmark{} The ENet server packs the player table into one byte array and sends it to every client (excerpt of \texttt{main.gd}, constants written out as numbers and the statistics counter left out).}
+\end{figure}
+
+
+
+
 \section{Making of the C++ UDP Server}
 TODO: write how the C++ server was built (goals, design decisions, problems you hit).
 
@@ -159,7 +365,7 @@ TODO: write how the C++ server was built (goals, design decisions, problems you 
 \begin{itemize}
 \item One file, \texttt{server/main.cpp} (about 590 lines), C++17, plain POSIX sockets, one thread.
 \item Binary protocol, version 2 (Table~\ref{tab:packets}). A player is identified by its network address, not by anything the client sends.
-\item Main loop (Figure~\ref{fig:cppLoop}): wait up to 5~ms for a packet, read everything waiting, and when 50~ms have passed since the last tick, run a tick.
+\item Main loop (Figure~\ref{fig:cppLoop}): wait for a packet (until the next tick is due, at most 5~ms), read everything waiting, and when the next tick is due, run it.
 \item A tick drops clients silent for more than 5~s and sends a snapshot to every client, split into datagrams of at most 1,200 bytes.
 \item Once a second it prints one telemetry line (tick number, players, packets and bytes in and out); the benchmark records these lines.
 \item A separate terminal display, \texttt{tui/tui.cpp}, exists for watching a server.
@@ -175,7 +381,6 @@ Message & Direction & Size & Contents \\
 JOIN & client to server & 2 B & type, version \\
 ACK & server to client & 6 B & type, version, player id \\
 STATE & client to server & 18 B & position, timestamp, number, goal \\
-PING & both ways & 10 B & client timestamp, number (echoed back) \\
 TICK (snapshot) & server to client & 16 + 12N B & header, then id, position and goal for each of N players \\
 \bottomrule
 \end{tabular}
@@ -189,9 +394,9 @@ TICK (snapshot) & server to client & 16 + 12N B & header, then id, position and 
   box/.style={draw,rounded corners=3pt,align=center,inner sep=5pt,text width=7.4cm,minimum height=0.9cm},
   dec/.style={draw,diamond,aspect=3,align=center,inner sep=1pt,fill=gray!10},
   arr/.style={-{Stealth},thick}]
-\node[box,fill=blue!8] (a) at (0,0) {\textbf{1. Wait} up to 5 ms for a packet};
-\node[box,fill=blue!8] (b) at (0,-1.6) {\textbf{2. Read} every waiting packet: JOIN adds a player and sends ACK; PING is echoed back; STATE stores the position};
-\node[dec] (c) at (0,-3.4) {50 ms since the\\ last tick?};
+\node[box,fill=blue!8] (a) at (0,0) {  \textbf{1. Wait} for a packet, until the next tick is due (at most 5 ms)};
+\node[box,fill=blue!8] (b) at (0,-1.6) {\textbf{2. Read} every waiting packet: JOIN adds a player and sends ACK; STATE stores the position};
+\node[dec] (c) at (0,-3.4) {Is the next\\ tick due?};
 \node[box,fill=green!10] (d) at (0,-5.2) {\textbf{3. Tick:} drop clients silent for 5 s, send a snapshot to every client};
 \node[box,fill=gray!12] (e) at (0,-6.6) {\textbf{4.} Once a second: print a telemetry line};
 \draw[arr] (a) -- (b);
@@ -201,7 +406,7 @@ TICK (snapshot) & server to client & 16 + 12N B & header, then id, position and 
 \draw[arr] (c.east) -- ++(2.6,0) |- (a.east) node[pos=0.2,above,font=\scriptsize] {no};
 \draw[arr] (e.west) -- ++(-0.6,0) |- (a.west);
 \end{tikzpicture}
-\caption{Main loop of the C++ server. It repeats forever on one thread.}
+\caption{Main loop of the C++ server. It repeats forever on one thread.}\label{fig:cppflow}
 \label{fig:cppLoop}
 \end{figure}
 
@@ -217,12 +422,12 @@ TODO: write how the two servers work and how they differ.
 \midrule
 Networking & raw UDP datagrams & ENet through Godot's multiplayer peer \\
 Default port & 7777 & 7778 \\
-Tick timing & polls the clock every few ms and restarts its timer after each tick (about 19 ticks per second) & Godot timer that fires every 50 ms (about 20 ticks per second) \\
+Tick timing & fixed-timestep schedule: each tick is due at an exact multiple of 50 ms, so it runs at 20 ticks per second (the first version restarted its timer at each tick and drifted to about 19, see Section~\ref{sec:fixes}) & Godot timer that fires every 50 ms and keeps its timetable (20 ticks per second) \\
 Join & JOIN message, ACK with player id & connection handled by ENet; the peer id is the player id \\
-Position update & 18-byte STATE datagram & remote procedure call (unreliable) \\
-Snapshot & 16 + 12N bytes, split into datagrams of at most 1,200 B & 8 + 12N bytes (binary format), one remote procedure call \\
+Position update & 18-byte STATE datagram (position, timestamp, number, goal), sent every tick & \texttt{submit\_state} remote procedure call (unreliable) with the same fields, sent every tick \\
+Snapshot & 16 + 12N bytes, split into datagrams of at most 1,200 B & 16 + 12N bytes (binary format, header padded from 8 to 16 bytes so both sizes match), one remote procedure call \\
 Client eviction & silent for 5 s & silent for 5 s \\
-Latency measure & dedicated PING message echoed by the server & game client's ping: last send until next snapshot \\
+Latency measure & game client's ping: last send until next snapshot & same Godot client script, same measure \\
 Telemetry & one line per second & periodic server statistics \\
 \bottomrule
 \end{tabular}
@@ -380,7 +585,7 @@ so the client is counted as not responding.}
 
 \section{Experimental Method}\label{sec:data}
 
-All runs use one server VM and three client VMs on Google Cloud (e2-standard-2 machines).
+All runs use one server VM and three client VMs on Google Cloud (the server on an e2-standard-2 machine, the clients on n2-standard-4 machines).
 ENet snapshots use the binary format from 22 September onward.
 
 \subsection{Main measures}
@@ -463,7 +668,7 @@ Figure~\ref{fig:fleet} shows where a test runs. A Python script automates every 
 \item It starts the server (the C++ UDP server, or the Godot ENet server in headless mode).
 \item It gives each client VM a plan: a list of states, each with a
 total client target and a duration. The client VMs start bot clients so that the
-total matches the plan, and each bot plays the NodeStrike game.
+total matches the plan, and each bot plays the NodeStrike game. Every bot is the same Godot client (\texttt{main.gd}): in UDP mode it talks to the C++ server and in ENet mode to the Godot server, so both servers are driven by the same client code.
 \item During every state, each client counts what it sent and received, checks
 the snapshot sequence numbers for gaps, and measures ping about once per second.
 \item The server writes one telemetry row per second (tick count, players
@@ -546,85 +751,44 @@ Granular ramps with $N_{\max}=300$ give 292 states per backend
 \toprule
 Date (2026) & Type & Backend & Counts & Time/state & Runs & Status \\
 \midrule
-Oct 16--17 & Progressive ladder & C++, ENet & 1, 10--300 & 10~s & 8 runs & ok \\
-Oct 17--19 & Hold & C++, ENet & 180, 260, 270, 300 & 20~min hold & 8 runs & ok \\
+Oct 23--24 & Progressive ladder (granular) & C++ server, ENet server & 1, 10--300 & 10~s & 8 runs & ok \\
+Not yet run & Hold & C++ server, ENet server & 180, 260, 270, 300 & 20~min hold & --- & TODO \\
 \bottomrule
 \end{tabular}
-\caption{Runs used in the results. The progressive ladder is eight complete runs per backend, each run a separate pass from 1 to 300 clients (one repetition each). Each hold target is also eight runs; the ENet captures that runs 3 and 4 were missing were repeated in a separate make-up batch.}
+\caption{Runs used in the results. The progressive ladder is eight complete runs per backend, each run a separate pass from 1 to 300 clients (one repetition each). The C++ server is driven by Godot UDP clients and the ENet server by Godot ENet clients. The hold tests have not been run yet.}
 \end{table}
 
 
-\section{Results}\label{sec:results}
+\section{Problems Found in the First Runs, and How They Were Fixed}\label{sec:fixes}
 
-\subsection{Test 1, progressive ladder: full run}
-Figure~\ref{fig:ladder} is the progressive ladder test (Section~\ref{sec:data}). Clients are
-added one at a time from 1 to 300, so each point is one client count. Each line is the mean of 8 complete runs, and the shaded band shows the lowest and highest run.
+After the first complete set of runs we found two problems that made the comparison between the C++ and the ENet server unfair, plus some measurement quirks. This section explains, for each one, what it was, why it happened, how it was fixed, and what it means for the first-round data. The first-round results in Section~\ref{sec:results} are kept for reference and are superseded: new data with the patches below applied will be made (8 progressive-ladder runs and 8 hold runs per backend) and will replace them.
 
-\begin{figure}[!htbp]
+\subsection{Overview}
+\begin{table}[H]
 \centering
-{\bfseries\small Test 1: progressive ladder, 1 to 300 clients, both backends (mean of 8 runs)\par}\vspace{4pt}
-\begin{tikzpicture}
-\begin{groupplot}[group style={group size=2 by 3,horizontal sep=1.7cm,vertical sep=1.9cm},
-  width=0.5\textwidth,height=4.3cm,xlabel={clients},xmin=0,xmax=300,
-  tick label style={font=\scriptsize},label style={font=\footnotesize},
-  title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25}]
-\nextgroupplot[title={Latency (ping)},ylabel={ms},ymode=log]
-\addplot[name path=pingca,draw=none,forget plot] table[col sep=comma,x=clients_target,y=ping_min]{data/final_cpp.csv};
-\addplot[name path=pingcb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=ping_max]{data/final_cpp.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=pingca and pingcb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=ping_mean]{data/final_cpp.csv};
-\addplot[name path=pingea,draw=none,forget plot] table[col sep=comma,x=clients_target,y=ping_min]{data/final_enet.csv};
-\addplot[name path=pingeb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=ping_max]{data/final_enet.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=pingea and pingeb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=ping_mean]{data/final_enet.csv};
-\nextgroupplot[title={Packet handling},ylabel={snapshots/s per client},ymin=0,ymax=38]
-\addplot[name path=recvca,draw=none,forget plot] table[col sep=comma,x=clients_target,y=recv_min]{data/final_cpp.csv};
-\addplot[name path=recvcb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=recv_max]{data/final_cpp.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=recvca and recvcb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=recv_mean]{data/final_cpp.csv};
-\addplot[name path=recvea,draw=none,forget plot] table[col sep=comma,x=clients_target,y=recv_min]{data/final_enet.csv};
-\addplot[name path=recveb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=recv_max]{data/final_enet.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=recvea and recveb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=recv_mean]{data/final_enet.csv};
-\addplot[black,dashed,domain=0:300,samples=2]{20};
-\nextgroupplot[title={Clients responding},ylabel={\%},ymin=80,ymax=101]
-\addplot[name path=respca,draw=none,forget plot] table[col sep=comma,x=clients_target,y=resp_min]{data/final_cpp.csv};
-\addplot[name path=respcb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=resp_max]{data/final_cpp.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=respca and respcb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=resp_mean]{data/final_cpp.csv};
-\addplot[name path=respea,draw=none,forget plot] table[col sep=comma,x=clients_target,y=resp_min]{data/final_enet.csv};
-\addplot[name path=respeb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=resp_max]{data/final_enet.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=respea and respeb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=resp_mean]{data/final_enet.csv};
-\nextgroupplot[title={Server tick rate},ylabel={Hz},ymin=15,ymax=21]
-\addplot[name path=tickca,draw=none,forget plot] table[col sep=comma,x=clients_target,y=tick_min]{data/final_cpp.csv};
-\addplot[name path=tickcb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=tick_max]{data/final_cpp.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=tickca and tickcb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=tick_mean]{data/final_cpp.csv};
-\addplot[name path=tickea,draw=none,forget plot] table[col sep=comma,x=clients_target,y=tick_min]{data/final_enet.csv};
-\addplot[name path=tickeb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=tick_max]{data/final_enet.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=tickea and tickeb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=tick_mean]{data/final_enet.csv};
-\addplot[black,dashed,domain=0:300,samples=2]{18};
-\nextgroupplot[title={Server CPU use},ylabel={\% of the server VM},ymin=0,ymax=35]
-\addplot[name path=scpuca,draw=none,forget plot] table[col sep=comma,x=clients_target,y=scpu_min]{data/final_cpp.csv};
-\addplot[name path=scpucb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=scpu_max]{data/final_cpp.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=scpuca and scpucb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=scpu_mean]{data/final_cpp.csv};
-\addplot[name path=scpuea,draw=none,forget plot] table[col sep=comma,x=clients_target,y=scpu_min]{data/final_enet.csv};
-\addplot[name path=scpueb,draw=none,forget plot] table[col sep=comma,x=clients_target,y=scpu_max]{data/final_enet.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=scpuea and scpueb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=clients_target,y=scpu_mean]{data/final_enet.csv};
-\end{groupplot}
-\node[anchor=north] at (\linewidth/2-3.5cm,-12.5cm) {\footnotesize \textcolor{blue!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} C++ UDP \quad \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} Godot ENet \quad shaded: lowest to highest run};
-\end{tikzpicture}
-\caption{Test 1, progressive ladder (16--17 October, 10~s per state). Each line is the mean of 8 complete runs and the shaded band spans the lowest to the highest run. Ping is on a log scale. Dashed lines: 20 snapshots per second (one per tick) and the 18~Hz threshold. Server CPU use is the mean over each state, read from the server VM. ENet values above 20 snapshots per second cannot be real, since the server ticks at 20~Hz; they appear to come from delayed log reads under heavy load.}
-\label{fig:ladder}
-\end{figure}
+\small
+\begin{tabular}{p{0.2\textwidth}p{0.28\textwidth}p{0.26\textwidth}p{0.16\textwidth}}
+\toprule
+Problem & Why it mattered & Fix & Status \\
+\midrule
+C++ ticks drifted to about 19~Hz & C++ did about 5\% fewer ticks per second than ENet & Fixed-timestep tick schedule & Fixed \\
+Snapshot sizes differed (8 vs 16 header bytes) & ENet sent slightly smaller packets than C++ & ENet header padded to 16 bytes & Fixed \\
+Slow ENet states and a last-state artifact & ENet rates were measured over longer windows; the last ladder state was inflated & To be handled in the analysis & Noted \\
+\bottomrule
+\end{tabular}
+\caption{The problems found in the first runs.}
+\end{table}
 
-\paragraph{Why the C++ tick rate is below 20 Hz.} The C++ server checks the clock every few milliseconds and starts each tick a little after 50~ms have passed. Each tick is slightly late, so it completes about 19 ticks per second instead of 20. This is a small built-in delay, not overload, and the line stays above the 18~Hz threshold.
+\subsection{Problem 1: the C++ tick drifted below 20~Hz}
 
-Figure~\ref{fig:drift} counts the ticks of both servers side by side, Figure~\ref{lst:tick} is the code behind it and Figure~\ref{lst:pseudo} explains it in pseudocode. The loop starts a tick as soon as it notices that 50~ms have passed, and then restarts its timer from that moment. If it notices 2~ms late, the next 50~ms are counted from the late moment, so the delay is never made up and each tick is 52~ms after the last. In 1~s that is $1000/52 \approx 19.2$ ticks instead of 20. In the measured data the tick rate falls from about 19.4~Hz (a 51.5~ms tick, about 1.5~ms late) with few clients to about 18.9~Hz (a 52.9~ms tick, about 2.9~ms late) at 300 clients, because with more clients each pass through the loop does more work, so the check for the next tick comes later.
+\subsubsection{What we saw}
+Both servers are meant to tick at 20~Hz. In the first round the ENet server ticked at about 20~Hz, but the C++ server ticked at about 19.4~Hz with few clients and fell to about 18.9~Hz at 300 clients. Over a second that is roughly 5\% fewer ticks and snapshots, so C++ was doing slightly less work than ENet.
+
+\subsubsection{Why it happened: the stopwatch}
+The C++ loop starts a tick as soon as it notices that 50~ms have passed, and then restarts its timer from that moment. If it notices 2~ms late, the next 50~ms are counted from the late moment, so the delay is never made up and each tick is 52~ms after the last. In one second that is $1000/52 \approx 19.2$ ticks instead of 20. With more clients each pass through the loop does more work, so the check for the next tick comes later and the drift grows. In the measured data the tick falls from about 51.5~ms (about 1.5~ms late) with few clients to about 52.9~ms (about 2.9~ms late) at 300 clients. The ENet server uses a Godot timer, which keeps its timetable, so it does not drift.
+
+\subsubsection{The drift in one picture}
+Figure~\ref{fig:drift} counts the ticks of both servers side by side. Each dot is one tick and the number is the tick count.
 
 \begin{figure}[H]
 \centering
@@ -654,6 +818,16 @@ Figure~\ref{fig:drift} counts the ticks of both servers side by side, Figure~\re
 \caption{Counting ticks, C++ against ENet (schematic, each tick noticed 2~ms late). Every dot is one tick and the number is the tick count. The C++ loop restarts its stopwatch at each tick, so its ticks are 52~ms apart and it has counted only 19 ticks after one second. The Godot timer keeps its 50~ms timetable, so its tick 20 arrives at exactly 1000~ms. After 10 ticks the C++ server is already 20~ms behind, and the gap keeps growing.}
 \label{fig:drift}
 \end{figure}
+
+\subsubsection{A worked example}
+Say every tick is noticed 2~ms late.
+\begin{itemize}
+\item \textbf{Stopwatch (C++ as first built).} Ticks land at 0, 52, 104, 156, \dots~ms. After 10 ticks the server is 20~ms behind the ideal schedule, and after one second it has completed only 19 ticks.
+\item \textbf{Timetable (ENet, and the C++ fix).} Ticks are aimed at 50, 100, 150, \dots~ms. A late tick is followed by an on-time one, so after one second exactly 20 ticks have been completed.
+\end{itemize}
+
+\subsubsection{The code behind it}
+Figure~\ref{lst:tick} shows the real tick check from the first version of the C++ server and Figure~\ref{lst:pseudo} explains it in pseudocode. The line that causes the drift is \texttt{last\_tick = now;}.
 
 \begin{figure}[H]
 \begin{lstlisting}[language=C++]
@@ -690,9 +864,242 @@ Timetable: noticed at 52 ms -> next tick due at 50 + 50 = 100 ms (on schedule).
 \label{lst:pseudo}
 \end{figure}
 
+\subsubsection{The fix}
+Two changes were made in \texttt{server/main.cpp}. First, the next tick is scheduled at an exact multiple of 50~ms after the previous due time, so lateness does not add up. Second, the wait for packets now ends when the next tick is due (at most 5~ms), so ticks are noticed sooner. If the server ever falls more than a whole tick behind, it resynchronizes instead of firing a burst of ticks. Figure~\ref{lst:fixed} shows the real code, including the resynchronization check.
 
-\subsection{Test 2, hold at 300 clients: ramp-up and hold}
-Figure~\ref{fig:hold300} is the hold test at 300 clients, the heaviest target, summed up over 8 runs. The grey left part is the ramp-up, when clients are being added (plus a short wait); time 0 is the moment the hold starts and no more clients are added. What matters is whether the lines recover after the ramp-up. C++ is steady in every run. ENet starts to fall behind during the ramp-up and does not recover: during the hold on average about 75\% of its clients respond (61 to 88\% across runs), it delivers about 16 snapshots per client per second, and its ping is around 1.4~s.
+\begin{figure}[H]
+\begin{lstlisting}[language=C++]
+// fixed code (server/main.cpp, excerpts)
+
+// before the loop: the tick schedule
+const auto tick_period = std::chrono::duration_cast<Clock::duration>(
+                             std::chrono::duration<double>(TICK_SEC));
+auto next_tick = Clock::now() + tick_period;
+
+while (true) {
+    // sleep until the next tick is due (at most 5 ms) so ticks are not late
+    auto until_tick_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        next_tick - Clock::now()).count();
+    if (until_tick_us < 0)    until_tick_us = 0;
+    if (until_tick_us > 5000) until_tick_us = 5000;
+    // ... wait for packets for until_tick_us, then read every waiting packet ...
+
+    // 20 Hz tick
+    auto now = Clock::now();
+    if (now >= next_tick) {
+        next_tick += tick_period;
+        if (next_tick <= now)            // fell more than a tick behind: resync
+            next_tick = now + tick_period;
+        // ... tick: drop silent clients, broadcast snapshots ...
+    }
+}
+\end{lstlisting}
+\caption{The fixed-timestep tick schedule in the C++ server (excerpts from \texttt{server/main.cpp}). The key change is \texttt{next\_tick += tick\_period}: the next tick is due one period after the previous due time, not after the moment the tick was noticed.}
+\label{lst:fixed}
+\end{figure}
+
+\newcommand{\hl}[2]{\colorbox{#1}{\strut#2}}
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+\textbf{\small Before (Section~7.2.5): stopwatch}\par\smallskip
+\begin{lstlisting}[language=C++,basicstyle=\ttfamily\scriptsize,escapechar=|,frame=none]
+|\hl{yellow!40}{wait\_for\_packets(5 ms);}|
+now = Clock::now();
+|\hl{yellow!40}{if (now - last\_tick >= tick) \{}|
+    |\hl{red!30}{last\_tick = now;}|
+    tick_n++;
+    // drop silent clients,
+    // broadcast snapshots
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+\textbf{\small After (Section~7.2.6): timetable}\par\smallskip
+\begin{lstlisting}[language=C++,basicstyle=\ttfamily\scriptsize,escapechar=|,frame=none]
+|\hl{yellow!40}{wait\_until(next\_tick, 5 ms);}|
+now = Clock::now();
+|\hl{yellow!40}{if (now >= next\_tick) \{}|
+    |\hl{green!30}{next\_tick += tick;}|
+    |\hl{green!30}{if (next\_tick <= now)}|
+    |\hl{green!30}{    next\_tick = now + tick;}|
+    tick_n++;
+    // drop silent clients,
+    // broadcast snapshots
+}
+\end{lstlisting}
+\end{minipage}
+\par\smallskip
+{\small\colorbox{red!30}{\strut~removed~}\quad\colorbox{yellow!40}{\strut~changed~}\quad\colorbox{green!30}{\strut~new~}}
+\caption{The old and the fixed tick loop side by side (simplified from Figures~\ref{lst:tick} and~\ref{lst:fixed}). The red line is the one that causes the drift: it restarts the stopwatch at the moment the tick was noticed. The green lines schedule the next tick from the previous due time, and resynchronize if the server falls a whole tick behind.}
+\label{lst:diff}
+\end{figure}
+
+\subsubsection{Result of the fix}
+In a 30-second local test the original server ticked at 19.67~Hz and the fixed server at 20.000~Hz. How this changes the cloud results will be reported with the corrected runs.
+
+\subsection{Problem 2: snapshots of different size}
+Both servers send every client a snapshot of all players, 12 bytes per player, plus a header. The C++ header was 16 bytes and the ENet binary header only 8, so each C++ snapshot was 8 bytes larger. The difference is tiny (Table~\ref{tab:snapsize}) but it is an unnecessary difference between the two backends, so the ENet header was padded to 16 bytes (bytes 8 to 15 are reserved and zero; the first 8 bytes are unchanged). Both transports now send 16 + 12N bytes.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{rrrr}
+\toprule
+Players N & C++ (bytes) & ENet before (bytes) & ENet now (bytes) \\
+\midrule
+100 & 1,216 & 1,208 & 1,216 \\
+200 & 2,416 & 2,408 & 2,416 \\
+300 & 3,616 & 3,608 & 3,616 \\
+\bottomrule
+\end{tabular}
+\caption{Size of one snapshot sent to one client.}
+\label{tab:snapsize}
+\end{table}
+
+\subsection{Measurement quirks noticed}
+\begin{itemize}
+\item \textbf{Slow ENet states.} When ENet was overloaded, a ``10~s'' ladder state actually lasted about 27~s, because the harness waited for slow client logs. Rates are computed over the real length, so they are correct.
+\item \textbf{The last ladder state.} The last state (300 clients) has no later state to measure its length from, so the nominal 10~s was used while its counters covered about 27~s. This inflated its snapshot rate (up to about 30 per second, which cannot be real at 20 ticks per second).
+\end{itemize}
+These are noted and will be handled in the analysis of the corrected runs.
+
+\subsection{What changes in the corrected runs}
+\begin{itemize}
+\item The C++ server ticks at 20~Hz (fixed-timestep schedule).
+\item Both servers send 16 + 12N byte snapshots.
+\item 8 progressive-ladder runs and 8 hold runs per backend will be made again with both patches applied.
+\end{itemize}
+\textbf{Status (22 October 2026):} the two fixes are written and tested locally, and a small cloud test is running. The new data, with both patches applied, will be made next (8 progressive-ladder runs and 8 hold runs per backend), and the first-round data in Section~\ref{sec:results} will then be replaced.
+
+\newcommand{\superseded}{\par\noindent\fcolorbox{red!60!black}{red!12}{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{\textbf{SUPERSEDED.} First-round data, kept for reference. Replaced by the granular runs in Section~\ref{sec:ladder}; the hold tests will be redone with the corrected servers.}}\par\medskip}
+\section{Results}\label{sec:results}
+
+\subsection{Test 1, progressive ladder: granular runs (both patches applied)}
+\label{sec:ladder}
+TODO: interpret the ladder results (latency, packet gaps, client limit, tick rate).
+
+\begin{figure}[!htbp]
+\centering
+{\bfseries\small Test 1: progressive ladder, 10 to 300 clients (mean of 8 runs, 10~s per client count)\par}\vspace{4pt}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 3,horizontal sep=1.7cm,vertical sep=1.9cm},
+  width=0.5\textwidth,height=4.6cm,xlabel={clients},xmin=10,xmax=300,
+  tick label style={font=\scriptsize},label style={font=\footnotesize},
+  title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25}]
+\nextgroupplot[title={Latency (ping proxy)},ylabel={ms},ymin=0]
+\addplot[name path=picp0lo,draw=none,forget plot] table[x=nclients,y=ping_min,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=picp0hi,draw=none,forget plot] table[x=nclients,y=ping_max,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=picp0lo and picp0hi];
+\addplot[blue!70!black,thick,mark=none] table[x=nclients,y=ping_mean,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=pien0lo,draw=none,forget plot] table[x=nclients,y=ping_min,col sep=comma]{data/g8_enet.csv};
+\addplot[name path=pien0hi,draw=none,forget plot] table[x=nclients,y=ping_max,col sep=comma]{data/g8_enet.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=pien0lo and pien0hi];
+\addplot[red!70!black,thick,mark=none] table[x=nclients,y=ping_mean,col sep=comma]{data/g8_enet.csv};
+\nextgroupplot[title={Packet gaps},ylabel={missed snapshots per state},ymin=0]
+\addplot[name path=gacp1lo,draw=none,forget plot] table[x=nclients,y=gaps_min,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=gacp1hi,draw=none,forget plot] table[x=nclients,y=gaps_max,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=gacp1lo and gacp1hi];
+\addplot[blue!70!black,thick,mark=none] table[x=nclients,y=gaps_mean,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=gaen1lo,draw=none,forget plot] table[x=nclients,y=gaps_min,col sep=comma]{data/g8_enet.csv};
+\addplot[name path=gaen1hi,draw=none,forget plot] table[x=nclients,y=gaps_max,col sep=comma]{data/g8_enet.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=gaen1lo and gaen1hi];
+\addplot[red!70!black,thick,mark=none] table[x=nclients,y=gaps_mean,col sep=comma]{data/g8_enet.csv};
+\nextgroupplot[title={Packet handling},ylabel={snapshots/s per client},ymin=0,ymax=26]
+\addplot[name path=recp2lo,draw=none,forget plot] table[x=nclients,y=recv_min,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=recp2hi,draw=none,forget plot] table[x=nclients,y=recv_max,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=recp2lo and recp2hi];
+\addplot[blue!70!black,thick,mark=none] table[x=nclients,y=recv_mean,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=reen2lo,draw=none,forget plot] table[x=nclients,y=recv_min,col sep=comma]{data/g8_enet.csv};
+\addplot[name path=reen2hi,draw=none,forget plot] table[x=nclients,y=recv_max,col sep=comma]{data/g8_enet.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=reen2lo and reen2hi];
+\addplot[red!70!black,thick,mark=none] table[x=nclients,y=recv_mean,col sep=comma]{data/g8_enet.csv};
+\draw[dashed,gray] (axis cs:10,20) -- (axis cs:300,20);
+\nextgroupplot[title={Clients responding},ylabel={\% of connected},ymin=0,ymax=105]
+\addplot[name path=recp3lo,draw=none,forget plot] table[x=nclients,y=resp_min,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=recp3hi,draw=none,forget plot] table[x=nclients,y=resp_max,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=recp3lo and recp3hi];
+\addplot[blue!70!black,thick,mark=none] table[x=nclients,y=resp_mean,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=reen3lo,draw=none,forget plot] table[x=nclients,y=resp_min,col sep=comma]{data/g8_enet.csv};
+\addplot[name path=reen3hi,draw=none,forget plot] table[x=nclients,y=resp_max,col sep=comma]{data/g8_enet.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=reen3lo and reen3hi];
+\addplot[red!70!black,thick,mark=none] table[x=nclients,y=resp_mean,col sep=comma]{data/g8_enet.csv};
+\nextgroupplot[title={Server tick rate},ylabel={Hz},ymin=15,ymax=21]
+\addplot[name path=ticp4lo,draw=none,forget plot] table[x=nclients,y=tick_min,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=ticp4hi,draw=none,forget plot] table[x=nclients,y=tick_max,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=ticp4lo and ticp4hi];
+\addplot[blue!70!black,thick,mark=none] table[x=nclients,y=tick_mean,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=tien4lo,draw=none,forget plot] table[x=nclients,y=tick_min,col sep=comma]{data/g8_enet.csv};
+\addplot[name path=tien4hi,draw=none,forget plot] table[x=nclients,y=tick_max,col sep=comma]{data/g8_enet.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=tien4lo and tien4hi];
+\addplot[red!70!black,thick,mark=none] table[x=nclients,y=tick_mean,col sep=comma]{data/g8_enet.csv};
+\draw[dashed,gray] (axis cs:10,18) -- (axis cs:300,18);
+\nextgroupplot[title={Server CPU},ylabel={\% of one VM},ymin=0]
+\addplot[name path=sccp5lo,draw=none,forget plot] table[x=nclients,y=scpu_min,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=sccp5hi,draw=none,forget plot] table[x=nclients,y=scpu_max,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=sccp5lo and sccp5hi];
+\addplot[blue!70!black,thick,mark=none] table[x=nclients,y=scpu_mean,col sep=comma]{data/g8_cppgodot.csv};
+\addplot[name path=scen5lo,draw=none,forget plot] table[x=nclients,y=scpu_min,col sep=comma]{data/g8_enet.csv};
+\addplot[name path=scen5hi,draw=none,forget plot] table[x=nclients,y=scpu_max,col sep=comma]{data/g8_enet.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=scen5lo and scen5hi];
+\addplot[red!70!black,thick,mark=none] table[x=nclients,y=scpu_mean,col sep=comma]{data/g8_enet.csv};
+\end{groupplot}
+\node[anchor=north] at ($(group c1r3.south east)!0.5!(group c2r3.south west)+(0,-1.5cm)$) {\footnotesize \textcolor{blue!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} C++ server \quad \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} ENet server \quad shaded band: lowest to highest run};
+\end{tikzpicture}
+\caption{Test 1, progressive ladder (granular batch, both patches applied; server on an e2-standard-2 VM, three n2-standard-4 client VMs, 10~s per client count; the 1-client warm-up state is left out). Each line is the mean of 8 runs and the band spans the lowest to the highest run. Ping is measured by the Godot client (time from its last send until a snapshot arrives), not a true round trip. Packet gaps are skipped snapshot numbers summed over all clients in a state. Dashed lines: 20 snapshots per second and the 18~Hz tick threshold.}
+\label{fig:ladder}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Backend & Clients & Resp. (\%) & Ping, ms & Snap/s & Gaps & Tick (Hz) & Srv CPU (\%) \\
+\midrule
+C++ server & 100 & 100.0 & 29 (26--31) & 19.9 (19.9--20.0) & 0 (0--0) & 20.00 & 4.4 \\
+C++ server & 150 & 100.0 & 30 (29--32) & 19.9 (19.8--19.9) & 0 (0--0) & 20.00 & 6.4 \\
+C++ server & 200 & 100.0 & 33 (32--35) & 19.8 (19.7--19.9) & 0 (0--0) & 20.00 & 8.9 \\
+C++ server & 250 & 100.0 & 35 (33--37) & 19.6 (19.5--19.9) & 0 (0--0) & 20.00 & 10.2 \\
+C++ server & 300 & 100.0 & 39 (37--42) & 21.0 (20.8--21.4) & 0 (0--0) & 20.00 & 4.5 \\
+\midrule
+ENet server & 100 & 100.0 & 28 (25--30) & 19.9 (19.9--20.0) & 0 (0--0) & 20.01 & 4.7 \\
+ENet server & 150 & 100.0 & 30 (28--31) & 19.9 (19.9--19.9) & 0 (0--1) & 20.01 & 7.8 \\
+ENet server & 200 & 100.0 & 33 (32--34) & 19.8 (19.8--19.9) & 10 (7--16) & 20.00 & 9.5 \\
+ENet server & 250 & 100.0 & 33 (33--34) & 19.7 (19.5--19.8) & 38 (20--85) & 20.00 & 13.5 \\
+ENet server & 300 & 100.0 & 35 (33--37) & 21.0 (20.9--21.1) & 116 (35--197) & 20.00 & 6.7 \\
+\bottomrule
+\end{tabular}
+\caption{Ladder results at selected client counts, summed up over 8 runs (10~s per state). Ping, Snap/s and Gaps show the mean and, in brackets, the lowest and highest run. Resp.\ = clients responding (mean); Ping = the Godot client's ping proxy; Snap/s = snapshots received per client per second; Gaps = skipped snapshot numbers in that state; Tick = server ticks per second; Srv CPU = server CPU.}
+\label{tab:ladder}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}rrrrrrr@{}}
+\toprule
+& \multicolumn{3}{c}{C++ server} & \multicolumn{3}{c}{ENet server} \\
+Run & Passed & Gaps & First fail & Passed & Gaps & First fail \\
+\midrule
+1 & 292 & 0 & -- & 291 & 4{,}454 & -- \\
+2 & 292 & 0 & -- & 291 & 3{,}903 & -- \\
+3 & 291 & 0 & -- & 288 & 5{,}402 & 294 \\
+4 & 291 & 0 & -- & 291 & 7{,}031 & -- \\
+5 & 291 & 0 & -- & 292 & 4{,}822 & -- \\
+6 & 291 & 0 & -- & 291 & 4{,}413 & -- \\
+7 & 292 & 0 & -- & 291 & 5{,}980 & -- \\
+8 & 291 & 5 & -- & 292 & 4{,}852 & -- \\
+\bottomrule
+\end{tabular}
+\caption{Per run, over the whole ladder (292 states): states that met the health limits, snapshot gaps summed over all states, and the first client count (from 10 upward) at which a state failed (-- = none).}
+\label{tab:limit}
+\end{table}
+
+\subsection{\texorpdfstring{\textcolor{red!70!black}{[SUPERSEDED] }}{[SUPERSEDED] }Test 2, hold at 300 clients: ramp-up and hold}
+\superseded
+Figure~\ref{fig:hold300} is the hold test at 300 clients, the heaviest target, summed up over 8 runs. The grey left part is the ramp-up, when clients are being added (plus a short wait); time 0 is the moment the hold starts and no more clients are added. What matters is whether the lines recover after the ramp-up. ENet starts to fall behind during the ramp-up and does not recover: during the hold on average about 75\% of its clients respond (61 to 88\% across runs), it delivers about 16 snapshots per client per second, and its ping is around 1.4~s.
 
 \begin{figure}[!htbp]
 \centering
@@ -704,20 +1111,12 @@ Figure~\ref{fig:hold300} is the hold test at 300 clients, the heaviest target, s
   title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25}]
 \nextgroupplot[title={Latency (ping)},ylabel={ms},ymin=2,ymax=6000,ymode=log]
 \fill[gray!18] (axis cs:-8,2) rectangle (axis cs:0,6000);
-\addplot[name path=pingca,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_min]{data/finalhold_cpp_300.csv};
-\addplot[name path=pingcb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_max]{data/finalhold_cpp_300.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=pingca and pingcb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=ping_mean]{data/finalhold_cpp_300.csv};
 \addplot[name path=pingea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_min]{data/finalhold_enet_300.csv};
 \addplot[name path=pingeb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_max]{data/finalhold_enet_300.csv};
 \addplot[red!30,opacity=0.6,forget plot] fill between[of=pingea and pingeb];
 \addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=ping_mean]{data/finalhold_enet_300.csv};
 \nextgroupplot[title={Packet handling},ylabel={snapshots/s per client},ymin=0,ymax=24]
 \fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,24);
-\addplot[name path=recvca,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_min]{data/finalhold_cpp_300.csv};
-\addplot[name path=recvcb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_max]{data/finalhold_cpp_300.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=recvca and recvcb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=recv_mean]{data/finalhold_cpp_300.csv};
 \addplot[name path=recvea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_min]{data/finalhold_enet_300.csv};
 \addplot[name path=recveb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_max]{data/finalhold_enet_300.csv};
 \addplot[red!30,opacity=0.6,forget plot] fill between[of=recvea and recveb];
@@ -725,34 +1124,27 @@ Figure~\ref{fig:hold300} is the hold test at 300 clients, the heaviest target, s
 \addplot[black,dashed,domain=-8:20,samples=2]{20};
 \nextgroupplot[title={Clients responding},ylabel={\% of connected},ymin=0,ymax=105]
 \fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
-\addplot[name path=responding_pctca,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_cpp_300.csv};
-\addplot[name path=responding_pctcb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_cpp_300.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=responding_pctca and responding_pctcb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_300.csv};
 \addplot[name path=responding_pctea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_300.csv};
 \addplot[name path=responding_pcteb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_300.csv};
 \addplot[red!30,opacity=0.6,forget plot] fill between[of=responding_pctea and responding_pcteb];
 \addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_300.csv};
 \nextgroupplot[title={Server tick rate},ylabel={Hz},ymin=15,ymax=21]
 \fill[gray!18] (axis cs:-8,15) rectangle (axis cs:0,21);
-\addplot[name path=tickca,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_min]{data/finalhold_cpp_300.csv};
-\addplot[name path=tickcb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_max]{data/finalhold_cpp_300.csv};
-\addplot[blue!30,opacity=0.6,forget plot] fill between[of=tickca and tickcb];
-\addplot[blue!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=tick_mean]{data/finalhold_cpp_300.csv};
 \addplot[name path=tickea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_min]{data/finalhold_enet_300.csv};
 \addplot[name path=tickeb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_max]{data/finalhold_enet_300.csv};
 \addplot[red!30,opacity=0.6,forget plot] fill between[of=tickea and tickeb];
 \addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=tick_mean]{data/finalhold_enet_300.csv};
 \addplot[black,dashed,domain=-8:20,samples=2]{18};
 \end{groupplot}
-\node[anchor=north] at (\linewidth/2-3.5cm,-9.0cm) {\footnotesize \textcolor{blue!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} C++ UDP \quad \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} Godot ENet \quad shaded band: lowest to highest run};
+\node[anchor=north] at (\linewidth/2-3.5cm,-9.0cm) {\footnotesize \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} ENet server \quad shaded band: lowest to highest run};
 \end{tikzpicture}
-\caption{Test 2, hold at 300 clients, one point per 10~s. Each line is the mean of 8 runs and the band spans the lowest to the highest run. Grey: clients being added (ramp-up and a short wait before the hold). White: the 20-minute hold. Dashed lines: 20 snapshots per second and the 18~Hz threshold. ENet latency is the game client's logged ping; C++ latency is a raw round trip, so the two are not directly comparable (see Section~\ref{sec:data}).}
+\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Test 2, hold at 300 clients, one point per 10~s. Each line is the mean of 8 runs and the band spans the lowest to the highest run. Grey: clients being added (ramp-up and a short wait before the hold). White: the 20-minute hold. Dashed lines: 20 snapshots per second and the 18~Hz threshold.}
 \label{fig:hold300}
 \end{figure}
 
-\subsection{Test 2, hold at every target}
-Figure~\ref{fig:holdall} repeats the hold test for all four targets, again with the ramp-up on the left, and Table~\ref{tab:holdsum} sums up each target. C++ held every target in all eight runs. ENet held 180 clients in all eight runs, but only one of eight runs at 260 clients and one of eight at 270, and none at 300.
+\subsection{\texorpdfstring{\textcolor{red!70!black}{[SUPERSEDED] }}{[SUPERSEDED] }Test 2, hold at every target}
+\superseded
+Figure~\ref{fig:holdall} repeats the hold test for all four targets, again with the ramp-up on the left, and Table~\ref{tab:holdsum} sums up each target. ENet held 180 clients in all eight runs, but only one of eight runs at 260 clients and one of eight at 270, and none at 300.
 
 \begin{figure}[!htbp]
 \centering
@@ -764,12 +1156,6 @@ Figure~\ref{fig:holdall} repeats the hold test for all four targets, again with 
   tick label style={font=\scriptsize},label style={font=\footnotesize},
   title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25},
   legend style={font=\tiny,at={(1.02,0.5)},anchor=west}]
-\nextgroupplot[title={C++ UDP, all four targets}]
-\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
-\addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_180.csv};
-\addplot[blue!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_260.csv};
-\addplot[green!50!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_270.csv};
-\addplot[orange!85!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_cpp_300.csv};
 \nextgroupplot[title={Godot ENet, 260 clients}]
 \fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
 \addplot[name path=e260a,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_260.csv};
@@ -790,7 +1176,7 @@ Figure~\ref{fig:holdall} repeats the hold test for all four targets, again with 
 \addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_300.csv};
 \end{groupplot}
 \end{tikzpicture}
-\caption{Test 2, share of clients responding during the hold at every target (mean of 8 runs). Grey: ramp-up. Top left: C++ UDP at 180, 260, 270 and 300 clients stays at 100\% (all four lines overlap). The other panels show Godot ENet at 260, 270 and 300 clients; the line is the mean of 8 runs and the red band spans the lowest to the highest run. ENet at 180 clients also stays at 100\% in all 8 runs and is not shown.}
+\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Test 2, share of clients responding during the hold at every target (mean of 8 runs). Grey: ramp-up. The panels show Godot ENet at 260, 270 and 300 clients; the line is the mean of 8 runs and the red band spans the lowest to the highest run. ENet at 180 clients also stays at 100\% in all 8 runs and is not shown.}
 \label{fig:holdall}
 \end{figure}
 
@@ -802,22 +1188,18 @@ Figure~\ref{fig:holdall} repeats the hold test for all four targets, again with 
 \toprule
 Backend & Clients & Resp. (\%) & Snap/s & Ping, ms & Tick (Hz) & Held \\
 \midrule
-C++ UDP & 180 & 100.0 (100.0--100.0) & 19.0 & 5 (5--6) & 19.0 & 8 of 8 \\
-C++ UDP & 260 & 100.0 (100.0--100.0) & 18.8 & 6 (6--6) & 18.8 & 8 of 8 \\
-C++ UDP & 270 & 100.0 (100.0--100.0) & 18.8 & 6 (6--6) & 18.8 & 8 of 8 \\
-C++ UDP & 300 & 100.0 (100.0--100.0) & 18.8 & 6 (6--6) & 18.8 & 8 of 8 \\
-\midrule
 Godot ENet & 180 & 100.0 (100.0--100.0) & 20.0 & 36 (35--36) & 20.0 & 8 of 8 \\
 Godot ENet & 260 & 93.2 (87.8--100.0) & 19.3 & 701 (106--1267) & 20.0 & 1 of 8 \\
 Godot ENet & 270 & 86.9 (76.7--100.0) & 18.5 & 927 (113--1612) & 20.0 & 1 of 8 \\
 Godot ENet & 300 & 75.2 (61.1--88.4) & 15.9 & 1356 (924--1908) & 20.0 & 0 of 8 \\
 \bottomrule
 \end{tabular}
-\caption{Hold results at each target, summed up over 8 runs. Each run is first averaged over its 20-minute hold; the table gives the mean of those averages with the lowest and highest run in brackets. Resp. = clients responding, Snap/s = snapshots received per client per second, Tick = server ticks per second. A run ``held'' if its hold averages met the health limits (at least 99\% responding, at least 18 snapshots per second, ping at most 150~ms, tick at least 18~Hz). C++ ping is a raw round trip and ENet ping is the game client's ping, so they are not directly comparable.}
+\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Hold results at each target, summed up over 8 runs. Each run is first averaged over its 20-minute hold; the table gives the mean of those averages with the lowest and highest run in brackets. Resp. = clients responding, Snap/s = snapshots received per client per second, Tick = server ticks per second. A run ``held'' if its hold averages met the health limits (at least 99\% responding, at least 18 snapshots per second, ping at most 150~ms, tick at least 18~Hz).}
 \label{tab:holdsum}
 \end{table}
 
-\subsection{Example data}
+\subsection{\texorpdfstring{\textcolor{red!70!black}{[SUPERSEDED] }}{[SUPERSEDED] }Example data}
+\superseded
 The tables below are real rows from our runs, to show what the data looks like.
 
 \paragraph{Progressive ladder: 8 runs summed up.}
@@ -831,12 +1213,6 @@ Each row sums up the 8 complete ladder runs at one client count: the mean, with 
 \toprule
 Backend & Clients & Resp. (\%) & Ping, ms & Snap/s & Tick (Hz) & Passing \\
 \midrule
-C++ UDP & 100 & 100.0 & 5 (5--5) & 19.1 (19.1--19.3) & 19.1 & 8 of 8 \\
-C++ UDP & 150 & 100.0 & 5 (5--5) & 19.1 (19.0--19.2) & 19.1 & 8 of 8 \\
-C++ UDP & 200 & 100.0 & 5 (5--6) & 19.0 (18.8--19.1) & 19.0 & 8 of 8 \\
-C++ UDP & 250 & 100.0 & 6 (5--6) & 18.9 (18.8--19.1) & 18.9 & 8 of 8 \\
-C++ UDP & 300 & 100.0 & 6 (6--6) & 18.9 (18.8--19.0) & 19.3 & 8 of 8 \\
-\midrule
 Godot ENet & 100 & 100.0 & 29 (28--31) & 19.9 (19.8--19.9) & 20.0 & 8 of 8 \\
 Godot ENet & 150 & 100.0 & 33 (31--34) & 19.6 (19.3--19.9) & 20.0 & 8 of 8 \\
 Godot ENet & 200 & 100.0 & 38 (34--42) & 18.0 (16.5--20.2) & 20.0 & 3 of 8 \\
@@ -844,17 +1220,10 @@ Godot ENet & 250 & 100.0 & 478 (46--942) & 14.4 (12.8--17.6) & 20.0 & 0 of 8 \\
 Godot ENet & 300 & 99.3 & 252 (50--1474) & 31.2 (28.2--35.8) & 20.0 & 3 of 8 \\
 \bottomrule
 \end{tabular}
-\caption{Example ladder rows, summed up over 8 runs (16--17 October, 10~s per state). Ping and Snap/s show the mean and, in brackets, the lowest and highest run. C++ ping is a raw round trip and ENet ping is the game client's ping, so they are not directly comparable.}
+\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Example ladder rows, summed up over 8 runs (16--17 October, 10~s per state). Ping and Snap/s show the mean and, in brackets, the lowest and highest run.}
 \end{table}
 
-\noindent\textbf{Two things to note.}
-First, the two backends measure latency differently: for C++ it is a raw round
-trip from a dedicated ping message, while for ENet it is the game client's
-logged ping (time until the next snapshot). They are not directly comparable
-until the Method section states how each is handled. Second, the ENet server's
-tick rate stays near 20~Hz even when its clients are failing, so for ENet the
-breakdown shows up as lost clients, low snapshot rate and high ping rather than
-a tick-rate drop. TODO: confirm why. The ENet server counts ticks from a Godot timer that fires every 50~ms without drift, so its tick counter keeps pace with the clock whether or not the work finished in time.
+\noindent\textbf{One thing to note.} The ENet server's tick rate stays near 20~Hz even when its clients are failing, so for ENet the breakdown shows up as lost clients, low snapshot rate and high ping rather than a tick-rate drop. TODO: confirm why. The ENet server counts ticks from a Godot timer that fires every 50~ms without drift, so its tick counter keeps pace with the clock whether or not the work finished in time.
 
 \subsection{How the runs were summed up}
 Both tests combine 8 complete runs per backend. For the ladder, each of the 292 client counts is paired with the same count in the other runs. For the holds, each 10~s state is paired by its position in the ramp-up or hold. The mean, lowest and highest value of each measure are reported. A ladder run passes at a client count if that count met the health limits; a hold run held if its hold averages met them. Hold runs 3 and 4 were missing some ENet captures because those captures failed, so they were repeated in a separate make-up batch and used in their place (ENet 270 and 300 clients for run 3, ENet 300 clients for run 4).
