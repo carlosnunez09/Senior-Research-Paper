@@ -32,20 +32,24 @@ in which every client is a bot that moves one tile per 20~Hz server tick. Both s
 Google Cloud with one server VM and three client VMs. Two tests are used: a progressive
 ladder that adds clients from 1 to 300, run eight times per backend, and a 20-minute hold at fixed loads of 180 to 300
 clients. We measure latency, packet handling (snapshots received per client per second), client limit, and server
-tick rate. TODO: write the results sentences from the granular ladder runs (the hold tests are still to be run).
+% TODO: write the results sentences from the granular ladder runs (the hold results are in Sections~\ref{sec:hold300} and~\ref{sec:holdall}) (see next line)
+tick rate. TODO: write the results sentences from the granular ladder runs (the hold results are in Sections~\ref{sec:hold300} and~\ref{sec:holdall}).
 \end{abstract}
 
 \noindent\textbf{Keywords:} game networking, UDP, ENet, Godot, tick rate, server capacity, benchmarking
 
-\noindent\colorbox{red!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textbf{Draft note.} The ladder results in Section~\ref{sec:ladder} are the eight runs of the new granular batch (both patches applied, larger client VMs). The abstract and the hold results are still from the first round of runs (\textbf{superseded}); the hold tests have not been rerun yet. See Section~\ref{sec:fixes} for the two comparability problems that were fixed.}}
+\noindent\colorbox{red!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textbf{Draft note.} The ladder results in Section~\ref{sec:ladder} are the eight runs of the new granular batch (both patches applied, larger client VMs). The hold results in Sections~\ref{sec:hold300} and~\ref{sec:holdall} are the eight runs of the new hold batch. The abstract and Section~\ref{sec:examples} are still from the first round of runs (\textbf{superseded}). See Section~\ref{sec:fixes} for the two comparability problems that were fixed.}}
 
 \section{Introduction}
+% TODO: write the introduction (problem, what this paper does, the questions) (see next line)
 TODO: write the introduction (problem, what this paper does, the questions).
 
 \section{Background and Related Work}
+% TODO: write the background (servers and transport, related work) (see next line)
 TODO: write the background (servers and transport, related work).
 
 \subsection{Ticks and snapshots}
+% TODO: write what a tick and a snapshot are (see next line)
 TODO: write what a tick and a snapshot are.
 
 \begin{table}[H]
@@ -120,6 +124,7 @@ information and clients see worse ping and more gaps.}
 \end{figure}
 
 \section{Making of the Godot Client and ENet Server}
+% TODO: write how the Godot client and the Godot ENet server were built (goals, design decisions, problems you hit) (see next line)
 TODO: write how the Godot client and the Godot ENet server were built (goals, design decisions, problems you hit).
 
 \paragraph{Notes from the code (delete when written).}
@@ -359,6 +364,7 @@ func _broadcast_binary_enet_tick() -> void:
 
 
 \section{Making of the C++ UDP Server}
+% TODO: write how the C++ server was built (goals, design decisions, problems you hit) (see next line)
 TODO: write how the C++ server was built (goals, design decisions, problems you hit).
 
 \paragraph{Notes from the code (delete when written).}
@@ -411,6 +417,7 @@ TICK (snapshot) & server to client & 16 + 12N B & header, then id, position and 
 \end{figure}
 
 \section{How Both Servers Work: The Ins and Outs}
+% TODO: write how the two servers work and how they differ (see next line)
 TODO: write how the two servers work and how they differ.
 
 \begin{table}[H]
@@ -737,6 +744,7 @@ On the ladder charts the horizontal axis is the number of clients, so each point
 
 
 \subsection{Health criteria and caveats}
+% TODO: write the pass/fail limits and what the measurements can and cannot show (see next line)
 TODO: write the pass/fail limits and what the measurements can and cannot show.
 
 \subsection{Runs}
@@ -746,16 +754,17 @@ Granular ramps with $N_{\max}=300$ give 292 states per backend
 
 \begin{table}[H]
 \centering
-\small
+\footnotesize
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}llllrrl@{}}
 \toprule
 Date (2026) & Type & Backend & Counts & Time/state & Runs & Status \\
 \midrule
 Oct 23--24 & Progressive ladder (granular) & C++ server, ENet server & 1, 10--300 & 10~s & 8 runs & ok \\
-Not yet run & Hold & C++ server, ENet server & 180, 260, 270, 300 & 20~min hold & --- & TODO \\
+Oct 24 & Hold & C++ server, ENet server & 180, 260, 270, 300 & 20~min hold & 8 runs & ok \\
 \bottomrule
 \end{tabular}
-\caption{Runs used in the results. The progressive ladder is eight complete runs per backend, each run a separate pass from 1 to 300 clients (one repetition each). The C++ server is driven by Godot UDP clients and the ENet server by Godot ENet clients. The hold tests have not been run yet.}
+\caption{Runs used in the results. The progressive ladder is eight complete runs per backend, each run a separate pass from 1 to 300 clients (one repetition each). The C++ server is driven by Godot UDP clients and the ENet server by Godot ENet clients. The hold tests are eight runs per backend and target, each a 20-minute hold (one repetition each) after a ramp-up of 10 clients per 10~s.}
 \end{table}
 
 
@@ -977,6 +986,7 @@ These are noted and will be handled in the analysis of the corrected runs.
 
 \subsection{Test 1, progressive ladder: granular runs (both patches applied)}
 \label{sec:ladder}
+% TODO: interpret the ladder results (latency, packet gaps, client limit, tick rate) (see next line)
 TODO: interpret the ladder results (latency, packet gaps, client limit, tick rate).
 
 \begin{figure}[!htbp]
@@ -1097,108 +1107,198 @@ Run & Passed & Gaps & First fail & Passed & Gaps & First fail \\
 \label{tab:limit}
 \end{table}
 
-\subsection{\texorpdfstring{\textcolor{red!70!black}{[SUPERSEDED] }}{[SUPERSEDED] }Test 2, hold at 300 clients: ramp-up and hold}
-\superseded
-Figure~\ref{fig:hold300} is the hold test at 300 clients, the heaviest target, summed up over 8 runs. The grey left part is the ramp-up, when clients are being added (plus a short wait); time 0 is the moment the hold starts and no more clients are added. What matters is whether the lines recover after the ramp-up. ENet starts to fall behind during the ramp-up and does not recover: during the hold on average about 75\% of its clients respond (61 to 88\% across runs), it delivers about 16 snapshots per client per second, and its ping is around 1.4~s.
+\subsection{Test 2, hold at 300 clients}
+\label{sec:hold300}
+% TODO: interpret the 300-client hold (latency, packet gaps, whether the tick rate dropped)
+TODO: interpret the 300-client hold.
 
 \begin{figure}[!htbp]
 \centering
-{\bfseries\small Test 2: hold at 300 clients, ramp-up then 20-minute hold (mean of 8 runs)\par}\vspace{4pt}
+{\bfseries\small Test 2: hold at 300 clients, 20 minutes (mean of 8 runs, one point per 10~s)\par}\vspace{4pt}
 \begin{tikzpicture}
-\begin{groupplot}[group style={group size=2 by 2,horizontal sep=1.7cm,vertical sep=2.2cm},
-  width=0.5\textwidth,height=5cm,xlabel={minutes (0 = hold starts)},xmin=-8,xmax=20,
+\begin{groupplot}[group style={group size=2 by 3,horizontal sep=1.7cm,vertical sep=1.9cm},
+  width=0.5\textwidth,height=4.6cm,xlabel={minutes into the hold},xmin=0,xmax=20,
   tick label style={font=\scriptsize},label style={font=\footnotesize},
   title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25}]
-\nextgroupplot[title={Latency (ping)},ylabel={ms},ymin=2,ymax=6000,ymode=log]
-\fill[gray!18] (axis cs:-8,2) rectangle (axis cs:0,6000);
-\addplot[name path=pingea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_min]{data/finalhold_enet_300.csv};
-\addplot[name path=pingeb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=ping_max]{data/finalhold_enet_300.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=pingea and pingeb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=ping_mean]{data/finalhold_enet_300.csv};
-\nextgroupplot[title={Packet handling},ylabel={snapshots/s per client},ymin=0,ymax=24]
-\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,24);
-\addplot[name path=recvea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_min]{data/finalhold_enet_300.csv};
-\addplot[name path=recveb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=recv_max]{data/finalhold_enet_300.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=recvea and recveb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=recv_mean]{data/finalhold_enet_300.csv};
-\addplot[black,dashed,domain=-8:20,samples=2]{20};
+\nextgroupplot[title={Latency (ping proxy)},ylabel={ms},ymin=0]
+\addplot[name path=acp0lo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=acp0hi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=acp0lo and acp0hi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=aen0lo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_enet_300.csv};
+\addplot[name path=aen0hi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_enet_300.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=aen0lo and aen0hi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_enet_300.csv};
+\nextgroupplot[title={Packet gaps},ylabel={missed snapshots per 10~s window},ymin=0]
+\addplot[name path=acp1lo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=acp1hi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=acp1lo and acp1hi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=aen1lo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_enet_300.csv};
+\addplot[name path=aen1hi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_enet_300.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=aen1lo and aen1hi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_enet_300.csv};
+\nextgroupplot[title={Packet handling},ylabel={snapshots/s per client},ymin=0,ymax=26]
+\addplot[name path=acp2lo,draw=none,forget plot] table[x=minute,y=recv_min,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=acp2hi,draw=none,forget plot] table[x=minute,y=recv_max,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=acp2lo and acp2hi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=recv_mean,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=aen2lo,draw=none,forget plot] table[x=minute,y=recv_min,col sep=comma]{data/h8_enet_300.csv};
+\addplot[name path=aen2hi,draw=none,forget plot] table[x=minute,y=recv_max,col sep=comma]{data/h8_enet_300.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=aen2lo and aen2hi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=recv_mean,col sep=comma]{data/h8_enet_300.csv};
+\draw[dashed,gray] (axis cs:0,20) -- (axis cs:20,20);
 \nextgroupplot[title={Clients responding},ylabel={\% of connected},ymin=0,ymax=105]
-\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
-\addplot[name path=responding_pctea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_300.csv};
-\addplot[name path=responding_pcteb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_300.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=responding_pctea and responding_pcteb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_300.csv};
+\addplot[name path=acp3lo,draw=none,forget plot] table[x=minute,y=resp_min,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=acp3hi,draw=none,forget plot] table[x=minute,y=resp_max,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=acp3lo and acp3hi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=resp_mean,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=aen3lo,draw=none,forget plot] table[x=minute,y=resp_min,col sep=comma]{data/h8_enet_300.csv};
+\addplot[name path=aen3hi,draw=none,forget plot] table[x=minute,y=resp_max,col sep=comma]{data/h8_enet_300.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=aen3lo and aen3hi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=resp_mean,col sep=comma]{data/h8_enet_300.csv};
 \nextgroupplot[title={Server tick rate},ylabel={Hz},ymin=15,ymax=21]
-\fill[gray!18] (axis cs:-8,15) rectangle (axis cs:0,21);
-\addplot[name path=tickea,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_min]{data/finalhold_enet_300.csv};
-\addplot[name path=tickeb,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=tick_max]{data/finalhold_enet_300.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=tickea and tickeb];
-\addplot[red!70!black,thin,mark=*,mark size=0.4pt] table[col sep=comma,x=minute_rel,y=tick_mean]{data/finalhold_enet_300.csv};
-\addplot[black,dashed,domain=-8:20,samples=2]{18};
+\addplot[name path=acp4lo,draw=none,forget plot] table[x=minute,y=tick_min,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=acp4hi,draw=none,forget plot] table[x=minute,y=tick_max,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=acp4lo and acp4hi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=tick_mean,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=aen4lo,draw=none,forget plot] table[x=minute,y=tick_min,col sep=comma]{data/h8_enet_300.csv};
+\addplot[name path=aen4hi,draw=none,forget plot] table[x=minute,y=tick_max,col sep=comma]{data/h8_enet_300.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=aen4lo and aen4hi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=tick_mean,col sep=comma]{data/h8_enet_300.csv};
+\draw[dashed,gray] (axis cs:0,18) -- (axis cs:20,18);
+\nextgroupplot[title={Server CPU},ylabel={\% of one VM},ymin=0]
+\addplot[name path=acp5lo,draw=none,forget plot] table[x=minute,y=scpu_min,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=acp5hi,draw=none,forget plot] table[x=minute,y=scpu_max,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=acp5lo and acp5hi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=scpu_mean,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=aen5lo,draw=none,forget plot] table[x=minute,y=scpu_min,col sep=comma]{data/h8_enet_300.csv};
+\addplot[name path=aen5hi,draw=none,forget plot] table[x=minute,y=scpu_max,col sep=comma]{data/h8_enet_300.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=aen5lo and aen5hi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=scpu_mean,col sep=comma]{data/h8_enet_300.csv};
 \end{groupplot}
-\node[anchor=north] at (\linewidth/2-3.5cm,-9.0cm) {\footnotesize \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} ENet server \quad shaded band: lowest to highest run};
+\node[anchor=north] at ($(group c1r3.south east)!0.5!(group c2r3.south west)+(0,-1.5cm)$) {\footnotesize \textcolor{blue!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} C++ server, Godot clients \quad \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} ENet server, ENet clients \quad shaded band: lowest to highest run};
 \end{tikzpicture}
-\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Test 2, hold at 300 clients, one point per 10~s. Each line is the mean of 8 runs and the band spans the lowest to the highest run. Grey: clients being added (ramp-up and a short wait before the hold). White: the 20-minute hold. Dashed lines: 20 snapshots per second and the 18~Hz threshold.}
+\caption{Test 2, hold at 300 clients (server on an e2-standard-2 VM, three n2-standard-4 client VMs). The clients are added first (ramp-up, 10 clients every 10~s) and the plot starts when the last client has joined; it then covers the 20-minute hold with no new clients. Each line is the mean of 8 runs and the band spans the lowest to the highest run. Packet gaps are skipped snapshot numbers summed over all clients in a 10~s window. Ping is the Godot client's ping proxy, not a true round trip. Dashed lines: 20 snapshots per second and the 18~Hz tick threshold.}
 \label{fig:hold300}
 \end{figure}
 
-\subsection{\texorpdfstring{\textcolor{red!70!black}{[SUPERSEDED] }}{[SUPERSEDED] }Test 2, hold at every target}
-\superseded
-Figure~\ref{fig:holdall} repeats the hold test for all four targets, again with the ramp-up on the left, and Table~\ref{tab:holdsum} sums up each target. ENet held 180 clients in all eight runs, but only one of eight runs at 260 clients and one of eight at 270, and none at 300.
+\subsection{Test 2, hold at every target}
+\label{sec:holdall}
+% TODO: interpret the holds at 180, 260, 270 and 300 clients (which target is the first to show gaps or ping growth)
+TODO: interpret the holds at every target.
 
 \begin{figure}[!htbp]
 \centering
-{\bfseries\small Test 2: hold test at every target, share of clients responding (mean of 8 runs)\par}\vspace{4pt}
+{\bfseries\small Test 2: hold at every target, packet gaps and latency (mean of 8 runs, one point per 10~s)\par}\vspace{4pt}
 \begin{tikzpicture}
-\begin{groupplot}[group style={group size=2 by 2,horizontal sep=1.7cm,vertical sep=1.9cm},
-  width=0.5\textwidth,height=4.3cm,xlabel={minutes (0 = hold starts)},xmin=-8,xmax=20,
-  ymin=0,ymax=105,ylabel={\% responding},
+\begin{groupplot}[group style={group size=2 by 4,horizontal sep=1.7cm,vertical sep=1.5cm},
+  width=0.5\textwidth,height=3.6cm,xmin=0,xmax=20,
   tick label style={font=\scriptsize},label style={font=\footnotesize},
-  title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25},
-  legend style={font=\tiny,at={(1.02,0.5)},anchor=west}]
-\nextgroupplot[title={Godot ENet, 260 clients}]
-\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
-\addplot[name path=e260a,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_260.csv};
-\addplot[name path=e260b,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_260.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=e260a and e260b];
-\addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_260.csv};
-\nextgroupplot[title={Godot ENet, 270 clients}]
-\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
-\addplot[name path=e270a,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_270.csv};
-\addplot[name path=e270b,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_270.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=e270a and e270b];
-\addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_270.csv};
-\nextgroupplot[title={Godot ENet, 300 clients}]
-\fill[gray!18] (axis cs:-8,0) rectangle (axis cs:0,105);
-\addplot[name path=e300a,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_min]{data/finalhold_enet_300.csv};
-\addplot[name path=e300b,draw=none,forget plot] table[col sep=comma,x=minute_rel,y=responding_pct_max]{data/finalhold_enet_300.csv};
-\addplot[red!30,opacity=0.6,forget plot] fill between[of=e300a and e300b];
-\addplot[red!70!black,thin,mark=none] table[col sep=comma,x=minute_rel,y=responding_pct_mean]{data/finalhold_enet_300.csv};
+  title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25}]
+\nextgroupplot[title={Packet gaps, 180 clients},ylabel={missed snapshots},ymin=0]
+\addplot[name path=bcp180galo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_cppgodot_180.csv};
+\addplot[name path=bcp180gahi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_cppgodot_180.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=bcp180galo and bcp180gahi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_cppgodot_180.csv};
+\addplot[name path=ben180galo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_enet_180.csv};
+\addplot[name path=ben180gahi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_enet_180.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=ben180galo and ben180gahi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_enet_180.csv};
+\nextgroupplot[title={Latency, 180 clients},ylabel={ms},ymin=0]
+\addplot[name path=bcp180pilo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_cppgodot_180.csv};
+\addplot[name path=bcp180pihi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_cppgodot_180.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=bcp180pilo and bcp180pihi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_cppgodot_180.csv};
+\addplot[name path=ben180pilo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_enet_180.csv};
+\addplot[name path=ben180pihi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_enet_180.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=ben180pilo and ben180pihi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_enet_180.csv};
+\nextgroupplot[title={Packet gaps, 260 clients},ylabel={missed snapshots},ymin=0]
+\addplot[name path=bcp260galo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_cppgodot_260.csv};
+\addplot[name path=bcp260gahi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_cppgodot_260.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=bcp260galo and bcp260gahi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_cppgodot_260.csv};
+\addplot[name path=ben260galo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_enet_260.csv};
+\addplot[name path=ben260gahi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_enet_260.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=ben260galo and ben260gahi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_enet_260.csv};
+\nextgroupplot[title={Latency, 260 clients},ylabel={ms},ymin=0]
+\addplot[name path=bcp260pilo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_cppgodot_260.csv};
+\addplot[name path=bcp260pihi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_cppgodot_260.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=bcp260pilo and bcp260pihi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_cppgodot_260.csv};
+\addplot[name path=ben260pilo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_enet_260.csv};
+\addplot[name path=ben260pihi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_enet_260.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=ben260pilo and ben260pihi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_enet_260.csv};
+\nextgroupplot[title={Packet gaps, 270 clients},ylabel={missed snapshots},ymin=0]
+\addplot[name path=bcp270galo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_cppgodot_270.csv};
+\addplot[name path=bcp270gahi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_cppgodot_270.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=bcp270galo and bcp270gahi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_cppgodot_270.csv};
+\addplot[name path=ben270galo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_enet_270.csv};
+\addplot[name path=ben270gahi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_enet_270.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=ben270galo and ben270gahi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_enet_270.csv};
+\nextgroupplot[title={Latency, 270 clients},ylabel={ms},ymin=0]
+\addplot[name path=bcp270pilo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_cppgodot_270.csv};
+\addplot[name path=bcp270pihi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_cppgodot_270.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=bcp270pilo and bcp270pihi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_cppgodot_270.csv};
+\addplot[name path=ben270pilo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_enet_270.csv};
+\addplot[name path=ben270pihi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_enet_270.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=ben270pilo and ben270pihi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_enet_270.csv};
+\nextgroupplot[title={Packet gaps, 300 clients},ylabel={missed snapshots},ymin=0, xlabel={minutes into the hold}]
+\addplot[name path=bcp300galo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=bcp300gahi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=bcp300galo and bcp300gahi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=ben300galo,draw=none,forget plot] table[x=minute,y=gaps_min,col sep=comma]{data/h8_enet_300.csv};
+\addplot[name path=ben300gahi,draw=none,forget plot] table[x=minute,y=gaps_max,col sep=comma]{data/h8_enet_300.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=ben300galo and ben300gahi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=gaps_mean,col sep=comma]{data/h8_enet_300.csv};
+\nextgroupplot[title={Latency, 300 clients},ylabel={ms},ymin=0, xlabel={minutes into the hold}]
+\addplot[name path=bcp300pilo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=bcp300pihi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[blue!70!black!25,forget plot] fill between[of=bcp300pilo and bcp300pihi];
+\addplot[blue!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_cppgodot_300.csv};
+\addplot[name path=ben300pilo,draw=none,forget plot] table[x=minute,y=ping_min,col sep=comma]{data/h8_enet_300.csv};
+\addplot[name path=ben300pihi,draw=none,forget plot] table[x=minute,y=ping_max,col sep=comma]{data/h8_enet_300.csv};
+\addplot[red!70!black!25,forget plot] fill between[of=ben300pilo and ben300pihi];
+\addplot[red!70!black,thick,mark=none] table[x=minute,y=ping_mean,col sep=comma]{data/h8_enet_300.csv};
 \end{groupplot}
+\node[anchor=north] at ($(group c1r4.south east)!0.5!(group c2r4.south west)+(0,-1.5cm)$) {\footnotesize \textcolor{blue!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} C++ server, Godot clients \quad \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} ENet server, ENet clients \quad shaded band: lowest to highest run};
 \end{tikzpicture}
-\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Test 2, share of clients responding during the hold at every target (mean of 8 runs). Grey: ramp-up. The panels show Godot ENet at 260, 270 and 300 clients; the line is the mean of 8 runs and the red band spans the lowest to the highest run. ENet at 180 clients also stays at 100\% in all 8 runs and is not shown.}
+\caption{Test 2, packet gaps (left) and latency (right) during the 20-minute hold at 180, 260, 270 and 300 clients. Each line is the mean of 8 runs and the band spans the lowest to the highest run. Gaps are skipped snapshot numbers summed over all clients in a 10~s window.}
 \label{fig:holdall}
 \end{figure}
 
 \begin{table}[H]
 \centering
-\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lrrrrrl@{}}
+\footnotesize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}lrrrrrrrl@{}}
 \toprule
-Backend & Clients & Resp. (\%) & Snap/s & Ping, ms & Tick (Hz) & Held \\
+Backend & Clients & Resp. (\%) & Snap/s & Ping, ms & Gaps (20~min) & Tick (Hz) & CPU (\%) & Held \\
 \midrule
-Godot ENet & 180 & 100.0 (100.0--100.0) & 20.0 & 36 (35--36) & 20.0 & 8 of 8 \\
-Godot ENet & 260 & 93.2 (87.8--100.0) & 19.3 & 701 (106--1267) & 20.0 & 1 of 8 \\
-Godot ENet & 270 & 86.9 (76.7--100.0) & 18.5 & 927 (113--1612) & 20.0 & 1 of 8 \\
-Godot ENet & 300 & 75.2 (61.1--88.4) & 15.9 & 1356 (924--1908) & 20.0 & 0 of 8 \\
+C++ server, Godot clients & 180 & 100.0 & 20.0 & 32 (32--32) & 0 (0--1) & 20.00 & 7.1 & 8 of 8 \\
+C++ server, Godot clients & 260 & 100.0 & 20.0 & 36 (35--36) & 147 (0--1175) & 20.00 & 9.7 & 8 of 8 \\
+C++ server, Godot clients & 270 & 100.0 & 20.0 & 37 (36--37) & 0 (0--0) & 20.00 & 10.1 & 8 of 8 \\
+C++ server, Godot clients & 300 & 100.0 & 20.0 & 39 (38--39) & 1 (0--8) & 20.00 & 11.6 & 8 of 8 \\
+\midrule
+ENet server, ENet clients & 180 & 100.0 & 20.0 & 31 (30--32) & 498 (353--830) & 20.00 & 9.0 & 8 of 8 \\
+ENet server, ENet clients & 260 & 100.0 & 20.0 & 34 (33--35) & 3458 (3004--3771) & 20.00 & 14.1 & 8 of 8 \\
+ENet server, ENet clients & 270 & 100.0 & 20.0 & 35 (34--35) & 4686 (3867--5031) & 20.00 & 15.0 & 8 of 8 \\
+ENet server, ENet clients & 300 & 100.0 & 20.0 & 37 (36--37) & 11781 (9659--14963) & 20.00 & 16.7 & 8 of 8 \\
 \bottomrule
 \end{tabular}
-\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Hold results at each target, summed up over 8 runs. Each run is first averaged over its 20-minute hold; the table gives the mean of those averages with the lowest and highest run in brackets. Resp. = clients responding, Snap/s = snapshots received per client per second, Tick = server ticks per second. A run ``held'' if its hold averages met the health limits (at least 99\% responding, at least 18 snapshots per second, ping at most 150~ms, tick at least 18~Hz).}
+\caption{Hold results at each target, summed up over 8 runs. Each run is first averaged over its 20-minute hold; the table gives the mean of those averages and, in brackets for Ping and Gaps, the lowest and highest run. Gaps = skipped snapshot numbers summed over all clients and the whole hold. Resp. = clients responding, Snap/s = snapshots received per client per second, Tick = server ticks per second, CPU = server CPU. A run ``held'' if its hold averages met the health limits (at least 99\% responding, at least 18 snapshots per second, ping at most 150~ms, tick at least 18~Hz).}
 \label{tab:holdsum}
 \end{table}
 
-\subsection{\texorpdfstring{\textcolor{red!70!black}{[SUPERSEDED] }}{[SUPERSEDED] }Example data}
+\subsection{\texorpdfstring{\textcolor{red!70!black}{[SUPERSEDED] }}{[SUPERSEDED] }Example data}\label{sec:examples}
 \superseded
 The tables below are real rows from our runs, to show what the data looks like.
 
@@ -1223,15 +1323,18 @@ Godot ENet & 300 & 99.3 & 252 (50--1474) & 31.2 (28.2--35.8) & 20.0 & 3 of 8 \\
 \caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Example ladder rows, summed up over 8 runs (16--17 October, 10~s per state). Ping and Snap/s show the mean and, in brackets, the lowest and highest run.}
 \end{table}
 
+% TODO: confirm why (see next line)
 \noindent\textbf{One thing to note.} The ENet server's tick rate stays near 20~Hz even when its clients are failing, so for ENet the breakdown shows up as lost clients, low snapshot rate and high ping rather than a tick-rate drop. TODO: confirm why. The ENet server counts ticks from a Godot timer that fires every 50~ms without drift, so its tick counter keeps pace with the clock whether or not the work finished in time.
 
 \subsection{How the runs were summed up}
-Both tests combine 8 complete runs per backend. For the ladder, each of the 292 client counts is paired with the same count in the other runs. For the holds, each 10~s state is paired by its position in the ramp-up or hold. The mean, lowest and highest value of each measure are reported. A ladder run passes at a client count if that count met the health limits; a hold run held if its hold averages met them. Hold runs 3 and 4 were missing some ENet captures because those captures failed, so they were repeated in a separate make-up batch and used in their place (ENet 270 and 300 clients for run 3, ENet 300 clients for run 4).
+Both tests combine 8 complete runs per backend. For the ladder, each of the 292 client counts is paired with the same count in the other runs. For the holds, each 10~s state is paired by its position in the ramp-up or hold. The mean, lowest and highest value of each measure are reported. A ladder run passes at a client count if that count met the health limits; a hold run held if its hold averages met them. Hold run 5 needed a second attempt; its first attempt is not used.
 
 \section{Discussion}
+% TODO: finish this (see next line)
 TODO.
 
 \section{Conclusion}
+% TODO: finish this (see next line)
 TODO.
 
 \begin{thebibliography}{9}
