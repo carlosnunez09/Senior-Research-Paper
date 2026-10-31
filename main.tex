@@ -15,16 +15,48 @@
 \emergencystretch=3em
 
 \title{Custom UDP Server vs.\ Godot ENet:\\[0.5ex]A Cloud Benchmark of Multiplayer Server Capacity}
-\author{Carlos Nunez\\
+\author{Carlos L Nunez\\
 Department of Computer Science and Engineering, Shippensburg University\\
 Mentor: Dr.\ Girard\\
 CSC 499 -- Senior Research Methods}
 \date{Fall 2026 (draft)}
 
 \begin{document}
+% ======================================================================================
+% COMMENT KEY (added while mapping the Spring 2026 proposal, "Final proposal paper.docx/.pdf", onto this paper)
+%   [PROPOSAL] = which part of the proposal can be reused here, and how it has to change
+%   [NEW]      = content this paper needs that the proposal does not have
+%   [CHECK]    = something that looks stale, inconsistent or unverified; please look at it
+% Search for "[PROPOSAL]", "[NEW]" or "[CHECK]" to jump between them.
+%
+% Proposal outline -> where it goes in this paper:
+%   Abstract                        -> Abstract (rewrite: numbers and setup changed)
+%   Introduction and Problem Desc.  -> Introduction
+%   Primary Objective, Hypotheses   -> Introduction (as research questions), Discussion
+%   Literature Review (5 topics)    -> Background and Related Work (split into subsections, see there)
+%   System Architecture, Class and component inventory, Headless Mode and Engine Overhead,
+%     What is being built from scratch, NodeStrike Workload
+%                                 -> Making of the Godot Client and ENet Server
+%   Packet Format, Heartbeat and Client Eviction
+%                                 -> Making of the C++ UDP Server (and the comparison table)
+%   Experiment Design (6.1-6.3)     -> Experimental Method
+%   Schedule, Progress Reports      -> not needed in the paper (course paperwork)
+%   Conclusion                      -> Conclusion (rewrite with real results)
+%   References                      -> bibliography (several proposal references are not in it yet)
+% [CHECK] Title block: the proposal says "CSC498" and this paper says "CSC 499"; use the right course number.
+% ======================================================================================
 \maketitle
 
 \begin{abstract}
+% [PROPOSAL] The proposal abstract is out of date and its numbers must NOT be reused. It promised five client
+%   counts (1, 5, 10, 20, 50) with three repetitions each, both servers on the same host, and a null/alternative
+%   hypothesis on "end-to-end round-trip latency". This paper has: a ladder from 1 to 300 clients run 8 times per
+%   backend, 20-minute holds at 180/260/270/300, and Google Cloud (1 server VM + 3 client VMs).
+%   What can be kept is the first idea: ENet is built into Godot, the alternative is a custom C++ UDP server,
+%   both are driven by the same Godot client and the same NodeStrike workload.
+% [CHECK] The TODO below appears twice: once commented out (line before "tick rate.") and once as printed text.
+%   The commented one also splits the sentence "...and server / tick rate." Remove both when the results sentences
+%   are written (the printed TODO currently shows up in the PDF).
 Developers who build multiplayer games in Godot must choose between the engine's built-in
 ENet dedicated server and a custom server written outside the engine. We compare a custom C++ UDP
 server with Godot's ENet headless server under the same workload, NodeStrike, a 20×20 grid game
@@ -38,17 +70,99 @@ tick rate. TODO: write the results sentences from the granular ladder runs (the 
 
 \noindent\textbf{Keywords:} game networking, UDP, ENet, Godot, tick rate, server capacity, benchmarking
 
-\noindent\colorbox{red!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textbf{Draft note.} The ladder results in Section~\ref{sec:ladder} are the eight runs of the new granular batch (both patches applied, larger client VMs). The hold results in Sections~\ref{sec:hold300} and~\ref{sec:holdall} are the eight runs of the new hold batch. The abstract and Section~\ref{sec:examples} are still from the first round of runs (\textbf{superseded}). See Section~\ref{sec:fixes} for the two comparability problems that were fixed.}}
+
 
 \section{Introduction}
+% [PROPOSAL] Sources: "Introduction and Problem Description" (3 paragraphs), "Primary Objective", "Hypotheses".
+%   Proposal para 1 = the choice Godot developers face. Godot has a built-in multiplayer API on ENet (RPCs, scene
+%     synchronization, automatic reliability, connection management) and also PacketPeerUDP for raw UDP. ENet's dedicated
+%     server runs as a full Godot engine instance (overhead pure networking may not need). A custom C++ UDP server removes
+%     that overhead and gives full control, but you must re-implement what ENet gives for free.
+%     -> Reuse as the opening paragraph. Cite \cite{aukstakalnis2024}, \cite{godotdedicated}, \cite{godotudp}.
+%   Proposal para 2 = the problem: no controlled comparison of the two backends serving the same Godot client under the
+%     same workload; developers rely on assumptions, forum posts and benchmarks from unrelated engines.
+%     -> Reuse as the problem statement. Soften "No published study isolates..." to "we did not find a published study..."
+%     unless you have actually verified that claim (a reviewer will test it).
+%   Proposal para 3 = what the project does (C++ server, headless ENet server, shared client, NodeStrike, benchmark tool;
+%     measures latency, packet throughput, client capacity).
+%     -> Rewrite with what was really done: 20x20 grid, bots at 20 Hz, server e2-standard-2 + three n2-standard-4 client VMs,
+%     ladder to 300 clients, 20-minute holds.
+% [NEW] The proposal has no research questions, main result, or roadmap. The introduction needs:
+%   (1) research questions, e.g. turn the proposal's H0/H1 into questions: which server keeps up with more clients? at what
+%       client count do gaps, ping or tick rate first degrade? does each server stay stable over a 20-minute hold?
+%   (2) the main finding in one or two sentences, (3) a short "contributions" list, (4) a one-paragraph roadmap of the sections.
+% [CHECK] The proposal's alternative hypothesis (H1) predicted equal performance at low counts and a growing C++ advantage at
+%   30-50 clients. The paper now goes to 300 clients, and tick rate stays about 20 Hz for both servers (the ENet breakdown shows
+%   up as gaps, not tick rate; see Table~\ref{tab:holdsum}). State H1 as the original prediction here, and say whether the data
+%   support it in the Discussion rather than in the introduction.
+% [CHECK] The proposal's time budget (240 minutes, 5 steps x 8 min x 3 reps) no longer applies; do not copy it.
 % TODO: write the introduction (problem, what this paper does, the questions) (see next line)
 TODO: write the introduction (problem, what this paper does, the questions).
 
 \section{Background and Related Work}
+% [PROPOSAL] Source: the whole "Literature Review" section. It has five topics plus a summary; the plan is to split them into
+%   subsections here (this section already has "Ticks and snapshots" below). Suggested layout:
+%
+%   \subsection{Godot's multiplayer stack}                    <- proposal "Godot Enet Stack"
+%     - Godot's high-level multiplayer API sits on ENet; headless dedicated-server export; flags such as --server.
+%     - Aukstakalnis p.4 quote: "the game players interact with the client, while the server is a stripped-down version that
+%       updates the game to the clients" (a headless server = same engine without audio/graphics, so engine overhead remains).
+%     - ENet conveniences: RPCs, automatic reliability, on-connect/on-disconnect callbacks. Cite \cite{aukstakalnis2024}.
+%     - Godot docs: dedicated-server export, developer must keep client-only code off the server \cite{godotdedicated};
+%       raw UDP/TCP/HTTP route for custom servers \cite{godotudp}.
+%     - Aukstakalnis p.6 quote on the trade-off (high-level API is easy, low-level networking is flexible but "takes much more
+%       time and knowledge to set up"). This is the trade-off the paper quantifies; good place for it.
+%     - Also move here from the proposal: "Headless Mode and Engine Overhead" (headless export turns off rendering and audio, but
+%       physics, game logic and networking still run inside the engine process; the C++ server runs only networking + minimum logic).
+%
+%   \subsection{Transport: UDP versus TCP}                   <- proposal "Transport Protocol: TCP vs. UDP"
+%     - Al-Dhief et al. p.173: UDP has lower latency than TCP (connectionless, no ordering) \cite{aldhief2018}.
+%     - TCP retransmission/ordering/congestion control add delay; in games most state (positions, input) is replaced by the
+%       next update, so a late retransmit is useless; sequence numbers on top of UDP where order matters.
+%     - Jones \cite{jones2025} supports "UDP for real-time". [CHECK] it is a Go tutorial on DEV Community; fine as a supporting
+%       cite, weak as the only evidence.
+%
+%   \subsection{Network topology and server design}          <- proposal "Network Topology"
+%     - Celik and Seckinti p.48: peer-to-peer has synchronization, cheating and latency problems and limits client counts.
+%     - Dedicated (client-server) topology: server owns the game state; preferred for competitive play.
+%     - Ahde p.22: dedicated-server design (logic vs bandwidth/traffic management). Ahde is a Unity thesis; say so.
+%     - This paper uses the simple form: one server process, all clients connect to it.
+%
+%   \subsection{Implementation language for a custom server} <- proposal "Implementation Language for a Custom Server"
+%     - Retunsky: C, C++, Rust cluster as high-performance vs Go/Java/Python \cite{retunsky2023}; Arboleda et al. p.8 (C++ vs
+%       Python, parallel I/O-bound); Zehra et al. (C++ vs Python, memory and time); GeeksforGeeks (C++ UDP socket tutorial).
+%     - [CHECK] The proposal sentence says Rust is in BOTH clusters ("C, C++, and Rust ... and Rust, Go, Java, and Python as
+%       memory-safe"). Check Retunsky and fix before reusing.
+%     - [CHECK] This paper does not compare languages, so keep this to 2-3 sentences justifying "why C++". Medium/GeeksforGeeks
+%       are weak sources; Arboleda and Zehra are the stronger ones.
+%
+%   \subsection{Queueing, packet loss and heartbeats}        <- proposal "Packet Loss, Buffer Bloat, and Heartbeat"
+%     - Latency is a distribution that depends on receive-queue handling: idle, filling, bloated regimes; when packets arrive
+%       faster than the socket buffer is drained, delay grows and then packets are dropped in the kernel (Raysync).
+%       Buffer bloat as a cause of latency/throughput trade-offs (Substack).
+%     - Silent disconnects on UDP are handled with heartbeats and a timeout.
+%     - [CHECK] Raysync (vendor blog) and "Substack" (no author/title that can be traced) are weak. Replace with a textbook or
+%       paper on queueing/bufferbloat (e.g. Gettys and Nichols, "Bufferbloat", ACM Queue 2011) or cut to one sentence.
+%     - This material explains the paper's results (gaps, rising ping before loss), so keep it, and link it to Section~\ref{sec:chain}.
+%     - The heartbeat part fits better in the C++ server section (both servers evict after 5 s, see the comparison table).
+%
+%   Closing paragraph <- proposal "Summary": UDP is the right transport for real-time games, C++ is a strong choice for
+%     low-overhead server I/O, ENet is convenient but carries engine overhead. Rewrite as "what is missing": no controlled
+%     comparison with the same Godot client at this scale. That leads into the Introduction's research questions.
+%
+% [CHECK] Nothing in this file uses \cite yet. The bibliography already has aukstakalnis2024, aldhief2018, jones2025,
+%   retunsky2023, godotdedicated, godotudp, unityticks, valvesource. Proposal references that are missing are listed at the
+%   bibliography at the end of this file.
 % TODO: write the background (servers and transport, related work) (see next line)
 TODO: write the background (servers and transport, related work).
 
 \subsection{Ticks and snapshots}
+% [PROPOSAL] The proposal never defines a tick or a snapshot. It only says the C++ server "broadcasts authoritative state to all
+%   registered clients on a fixed tick interval" (System Architecture) and that NodeStrike syncs player positions plus the
+%   objective position each tick (NodeStrike Workload). This subsection is new writing.
+% [NEW] Good citations for it are already in the bibliography but uncited: \cite{unityticks} (ticks and update rates) and
+%   \cite{valvesource} (Source engine: tick rate, snapshots, update rate). The table and figure below carry the paper's own
+%   definitions (20 Hz = 50 ms per tick; snapshot = 16 + 12N bytes), so the text only needs to connect them to those sources.
 % TODO: write what a tick and a snapshot are (see next line)
 TODO: write what a tick and a snapshot are.
 
@@ -69,7 +183,7 @@ Effective tick rate & Ticks the server actually completes per second. Healthy $\
 \end{tabular}
 \caption{Terms used in this paper.}\label{tab:terms}
 \end{table}
-
+%this is where i keep the scemeatic of server ticks
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[x=0.052cm,y=1cm,font=\footnotesize]
@@ -124,6 +238,24 @@ information and clients see worse ping and more gaps.}
 \end{figure}
 
 \section{Making of the Godot Client and ENet Server}
+% [PROPOSAL] Sources: "System Architecture", "Class and component inventory", "Headless Mode and Engine Overhead",
+%   "What is being built from scratch", "The Node Strike Workload".
+%   - System Architecture: one shared Godot client with an ENet path (EnetMultiplayerPeer) and a raw-UDP path (PacketPeerUDP);
+%     the client sends NodeStrike input upstream and applies the server's authoritative state downstream; the ENet server is a
+%     headless export using Godot's dedicated-server preset. -> reuse as the opening overview of this section.
+%   - Class inventory table (ENetConnection, ENetMultiplayerPeer, MultiplayerAPI, PacketPeerUDP): reuse as a small table or one
+%     paragraph. [CHECK] The proposal table has typos ("A head-class ENet connection", "@rcp"); fix if you copy it. Check which of
+%     these classes main.gd really uses (the notes below mention an ENet multiplayer peer and RPCs, but the UDP client path
+%     goes through raw UDP; confirm it uses PacketPeerUDP).
+%   - Headless engine overhead (rendering and audio off; physics, game logic and networking still run) belongs in Background, with a
+%     pointer from here.
+%   - NodeStrike workload. The proposal describes an objective-collection game: an objective spawns in a random cell, each client
+%     moves toward the NEAREST objective, collects it, and a new one spawns; synced state = every player's position + the objective;
+%     input = a movement vector. [CHECK] The implementation here is different: a 20x20 grid, each bot picks a goal tile, walks one
+%     tile per 20 Hz tick, and the snapshot carries each player's position and goal (id, x, y, gx, gy), with no shared objective
+%     that gets collected. Describe what the code does, and say briefly that the game was simplified from the proposal.
+%   - The reason for keeping the game this simple is already in the proposal: minimal game logic so the difference between
+%     backends is the networking, not the game. Keep that sentence.
 % TODO: write how the Godot client and the Godot ENet server were built (goals, design decisions, problems you hit) (see next line)
 TODO: write how the Godot client and the Godot ENet server were built (goals, design decisions, problems you hit).
 
@@ -288,7 +420,7 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \node[font=\Large\bfseries] at (7.5,-6.0) {=};
 \node[font=\scriptsize,align=center] at (7.5,-6.6) {same rows,\\ same tick};
 \end{tikzpicture}
-\caption{Server and client side by side (redrawn). The server keeps every player in a table (a Godot Dictionary, id $\rightarrow$ position and goal). Every tick it packs the table into bytes and sends it. Each client unpacks the bytes into its own table of the same name and draws it, so the two screens show the same players and follow each other, about one network trip apart. The client's only extra is the white outline on its own square. Going the other way, each client sends only its own row.}
+\caption{Server and client side by side (redrawn). The server keeps every player in a table (a Godot Dictionary, id $\rightarrow$  position and goal). Every tick it packs the table into bytes and sends it. Each client unpacks the bytes into its own table of the same name and draws it, so the two screens show the same players and follow each other, about one network trip apart. The client's only extra is the white outline on its own square. Going the other way, each client sends only its own row.}
 \end{figure}
 
 \begin{figure}[H]
@@ -364,8 +496,23 @@ func _broadcast_binary_enet_tick() -> void:
 
 
 \section{Making of the C++ UDP Server}
+% [PROPOSAL] Sources: "What is being built from scratch", "Packet Format", "Heartbeat and Client Eviction".
+%   - Planned design (matches the code): single-threaded receive loop, client registry keyed by IP and port, fixed-tick state
+%     broadcast, heartbeat eviction, binary packet format. -> reuse as the goals paragraph ("design decisions").
+%   - Packet format. The proposal: one-byte message ID then a payload; messages CONNECT, INPUT (movement vector + sequence number),
+%     STATE (positions), HEARTBEAT (once per second) and DISCONNECT. [CHECK] The built protocol (Table~\ref{tab:packets}) is
+%     version 2 with JOIN, ACK, STATE and TICK only: no separate INPUT, HEARTBEAT or DISCONNECT. Say that the design changed and
+%     why (e.g. the STATE message sent every tick already works as a heartbeat; there is no explicit disconnect, silent clients
+%     time out). Make sure that is actually how the code behaves before writing it.
+%   - Heartbeat and eviction: the proposal says the 5 s timeout was chosen to match the ENet server's default, so connection
+%     management is comparable. -> reuse this reasoning; it explains the "Client eviction" row of Table~\ref{tab:compare}.
+%     [CHECK] The proposal says the server compares the clock with every client's last-seen time on each loop pass, but the
+%     notes below say the check happens once per tick; describe the code, not the proposal.
+%   - "Problems you hit" (asked for in the TODO) already exists in this file: the tick drift (Section~\ref{sec:fixes}). Summarize
+%     it here in two sentences and point there.
 % TODO: write how the C++ server was built (goals, design decisions, problems you hit) (see next line)
 TODO: write how the C++ server was built (goals, design decisions, problems you hit).
+%TODO write how the C++ server was built (goals, design decisions, problems you hit
 
 \paragraph{Notes from the code (delete when written).}
 \begin{itemize}
@@ -417,6 +564,17 @@ TICK (snapshot) & server to client & 16 + 12N B & header, then id, position and 
 \end{figure}
 
 \section{How Both Servers Work: The Ins and Outs}
+% [PROPOSAL] Reuse the proposal's "Headless Mode and Engine Overhead" argument here as the reason the two servers differ:
+%   in a normal Godot client the engine runs rendering, audio, physics, game logic and networking; the dedicated-server export
+%   drops rendering and audio but keeps physics, game logic and networking inside the engine process; the C++ server runs
+%   only networking and the minimum game logic. The proposal says this difference "is precisely what the benchmark is designed
+%   to characterize".
+% [CHECK] Do not claim the overhead is the cause of any measured difference unless you measured it (e.g. profiled the Godot
+%   process). What you can say is that ENet's server used more CPU (compare the CPU columns in Tables~\ref{tab:ladder} and
+%   \ref{tab:holdsum}) and the proposal's explanation is a candidate. Keep that wording for the Discussion too.
+% [CHECK] Table~\ref{tab:compare} is the main content of this section; the text should walk through its rows (networking, tick
+%   timing, join, position update, snapshot, eviction, latency measure, telemetry) and say which differences are intended and
+%   which were removed to keep the test fair (header size, tick schedule).
 % TODO: write how the two servers work and how they differ (see next line)
 TODO: write how the two servers work and how they differ.
 
@@ -591,6 +749,34 @@ so the client is counted as not responding.}
 \end{figure}
 
 \section{Experimental Method}\label{sec:data}
+% [PROPOSAL] Sources: "Experiment Design" (6.1 Procedure, 6.2 Variable and control, 6.3 Data Analysis and Measurement) and
+%   "Primary Objective". The structure carries over, but most of the setup changed. What changed:
+%
+%   Proposal                                          | This paper
+%   --------------------------------------------------|------------------------------------------------------------
+%   Client counts 1, 5, 10, 20, 50 (H1: 30 to 50)     | Ladder 1, 10..300 (292 states); holds at 180/260/270/300
+%   3 repetitions, 8 min per step                     | 8 runs per backend; 10 s per ladder state; 20 min holds
+%   Both backends on the same host machine            | Google Cloud: 1 server VM + 3 client VMs (private network)
+%   Headless Godot clients in containers              | Headless Godot bot clients on 3 VMs (script-controlled)
+%   Wireshark on the host interface + per-packet      | Per-second server telemetry + per-state client counters
+%     client CSV timestamps                           |   + per-second CPU/memory/network on every VM
+%   Latency = end-to-end round trip (ms)              | Ping proxy: last send until next snapshot (includes tick wait)
+%   Throughput = packets/s from Wireshark; bandwidth  | Snapshots received per client per second; server packet/byte
+%     MB/s from capture stats                         |   counters exist in telemetry but bandwidth is not reported
+%   Packet loss = (sent - received) / sent            | Snapshot sequence-number gaps ("protocol-level loss")
+%   Capacity = highest count without degradation      | Clients responding + health limits (see Health criteria)
+%   Significance testing (H0/H1, Task 1.5)            | Currently only mean and lowest/highest run (see [CHECK] below)
+%
+%   Reusable from the proposal: the independent variables (backend, number of clients), the idea of restarting the backend
+%   between windows, and the list of controlled variables. [CHECK] The proposal's controls include the host machine, network
+%   interface, kernel socket-buffer parameters, Godot client build, NodeStrike logic/tick rate and time of day. Say which of those
+%   are still controlled (same zone, same VM types, same client script and 20 Hz) and which are not (kernel buffer settings,
+%   time of day) so a reader knows what is held constant.
+% [CHECK] The proposal promised a test for statistically significant differences (Task 1.5, and the H0/H1 pair). The paper
+%   so far reports means with lowest/highest run only. Either add a test (8 runs per backend, e.g. Mann-Whitney U on per-run
+%   gap counts) or state clearly that the analysis is descriptive and why. The Discussion and Conclusion depend on which.
+% [CHECK] The proposal says server and clients share one machine; here they are on separate VMs. Network latency between VMs is
+%   therefore part of every ping number. Say that in the text so readers do not compare the ping values with local-host numbers.
 
 All runs use one server VM and three client VMs on Google Cloud (the server on an e2-standard-2 machine, the clients on n2-standard-4 machines).
 ENet snapshots use the binary format from 22 September onward.
@@ -744,10 +930,22 @@ On the ladder charts the horizontal axis is the number of clients, so each point
 
 
 \subsection{Health criteria and caveats}
+% [PROPOSAL] The proposal defines capacity only as "the highest client count sustained without measurable degradation", with no
+%   numbers. The numeric limits now exist but are only written in the caption of Table~\ref{tab:holdsum}: at least 99\% of
+%   clients responding, at least 18 snapshots per second per client, ping at most 150 ms, server tick at least 18 Hz. Put them
+%   here as a list or small table, and say how a ladder state "passes" (Table~\ref{tab:limit}) versus how a hold "holds".
+% [NEW] Caveats to write (these are in the paper's text already, scattered; collect them here):
+%   - ping is a proxy: it includes waiting for the next 50 ms tick, so it is not a true round trip (the proposal wording
+%     "end-to-end round-trip latency" must not be reused);
+%   - gaps are protocol-level losses, not measured network packet-loss percentages;
+%   - one cloud zone, one server machine type, bot clients rather than real players, one workload;
+%   - the last ladder state artifact and the slow-state timing quirk (Section~\ref{sec:fixes}).
 % TODO: write the pass/fail limits and what the measurements can and cannot show (see next line)
 TODO: write the pass/fail limits and what the measurements can and cannot show.
 
 \subsection{Runs}
+% [CHECK] Table below says both tests were run on Oct 23--24 with status "ok", but Section~\ref{sec:fixes} still says the new data
+%   "will be made" and "is running" (status of 22 October). Bring the two in line.
 
 Granular ramps with $N_{\max}=300$ give 292 states per backend
 ($1$ plus $10$ through $300$).
@@ -769,6 +967,12 @@ Oct 24 & Hold & C++ server, ENet server & 180, 260, 270, 300 & 20~min hold & 8 r
 
 
 \section{Problems Found in the First Runs, and How They Were Fixed}\label{sec:fixes}
+% [PROPOSAL] Nothing in the proposal covers this section; it is new material from the work itself. It also answers the
+%   "problems you hit" requests in the two "Making of" sections, so link to it from there.
+% [CHECK] Tense and status are stale. The paragraph below and the "Status (22 October 2026)" paragraph at the end of this section
+%   say the corrected data "will be made", and that the first-round results in Section~\ref{sec:results} are "kept for
+%   reference". The Results section now holds the corrected runs (Oct 23--24, Table of runs) and only the "Example data"
+%   subsection is superseded. Rewrite in the past tense.
 
 After the first complete set of runs we found two problems that made the comparison between the C++ and the ENet server unfair, plus some measurement quirks. This section explains, for each one, what it was, why it happened, how it was fixed, and what it means for the first-round data. The first-round results in Section~\ref{sec:results} are kept for reference and are superseded: new data with the patches below applied will be made (8 progressive-ladder runs and 8 hold runs per backend) and will replace them.
 
@@ -838,6 +1042,9 @@ Say every tick is noticed 2~ms late.
 \subsubsection{The code behind it}
 Figure~\ref{lst:tick} shows the real tick check from the first version of the C++ server and Figure~\ref{lst:pseudo} explains it in pseudocode. The line that causes the drift is \texttt{last\_tick = now;}.
 
+% [CHECK] The listing below says "current code" and "fix (not applied)". The fix IS applied now (see the next listings and the
+%   Result of the fix). Rename to "first version" / "fix (applied below)" so the paper does not contradict itself. The pseudocode
+%   figure after it also says "the C++ server today"; same problem.
 \begin{figure}[H]
 \begin{lstlisting}[language=C++]
 // current code (server/main.cpp): the tick loop
@@ -911,6 +1118,8 @@ while (true) {
 \begin{figure}[H]
 \centering
 \begin{minipage}[t]{0.48\textwidth}
+% [CHECK] "Section~7.2.5" and "Section~7.2.6" here (and in the "After" box) are typed by hand. They will break if sections move.
+%   Put \label on the two subsubsections ("The code behind it", "The fix") and use \ref instead.
 \textbf{\small Before (Section~7.2.5): stopwatch}\par\smallskip
 \begin{lstlisting}[language=C++,basicstyle=\ttfamily\scriptsize,escapechar=|,frame=none]
 |\hl{yellow!40}{wait\_for\_packets(5 ms);}|
@@ -983,9 +1192,21 @@ These are noted and will be handled in the analysis of the corrected runs.
 
 \newcommand{\superseded}{\par\noindent\fcolorbox{red!60!black}{red!12}{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{\textbf{SUPERSEDED.} First-round data, kept for reference. Replaced by the granular runs in Section~\ref{sec:ladder}; the hold tests will be redone with the corrected servers.}}\par\medskip}
 \section{Results}\label{sec:results}
+% [PROPOSAL] The proposal has no results. Its analysis plan (6.3) was: latency distribution per backend, packets per second,
+%   loss from sent versus received counts, bandwidth from Wireshark. Only the first two have a counterpart here; see the
+%   comparison table at the top of Experimental Method.
 
 \subsection{Test 1, progressive ladder: granular runs (both patches applied)}
 \label{sec:ladder}
+% [NEW] Things the tables already show (check them against the CSVs before you write them as findings):
+%   - C++ server: gaps are 0 at every selected count (run 8 had 5 gaps in total); 291--292 of 292 states passed in every run.
+%   - ENet server: gaps first appear around 150--200 clients (Table~\ref{tab:ladder}: 0 at 100, 10 at 200, 38 at 250, 116 at 300)
+%     and total 3,900--7,000 per run (Table~\ref{tab:limit}); ping and tick rate are close to C++ (tick about 20 Hz for both).
+%   - So "client limit" is not a single sharp number for either server in this data: all states mostly pass. Decide how to
+%     define it (e.g. first count with sustained gaps, or first failing state per run, 294 in ENet run 3) before writing.
+% [CHECK] In Table~\ref{tab:ladder}, the 300-client row looks like the "last ladder state" artifact described in Section~\ref{sec:fixes}:
+%   Snap/s is 21.0 (above the 20 Hz maximum) and server CPU drops from 10.2/13.5\% at 250 to 4.5/6.7\% at 300. Either exclude the
+%   last state or say in the caption why it is not comparable; do not interpret it as a real result.
 % TODO: interpret the ladder results (latency, packet gaps, client limit, tick rate) (see next line)
 TODO: interpret the ladder results (latency, packet gaps, client limit, tick rate).
 
@@ -1109,6 +1330,9 @@ Run & Passed & Gaps & First fail & Passed & Gaps & First fail \\
 
 \subsection{Test 2, hold at 300 clients}
 \label{sec:hold300}
+% [NEW] From Table~\ref{tab:holdsum} (verify against data/): at 300 clients all 8 runs of both servers "held" (responding 100\%, 20 snap/s,
+%   tick 20 Hz, ping 39 vs 37 ms), but ENet had a mean of about 11,800 gaps over 20 minutes (9,659--14,963) versus about 1 for C++
+%   (0--8), and used more server CPU (16.7 vs 11.6\%). So the difference is gaps, not the health limits.
 % TODO: interpret the 300-client hold (latency, packet gaps, whether the tick rate dropped)
 TODO: interpret the 300-client hold.
 
@@ -1185,6 +1409,11 @@ TODO: interpret the 300-client hold.
 
 \subsection{Test 2, hold at every target}
 \label{sec:holdall}
+% [NEW] From Table~\ref{tab:holdsum} (verify against data/): ENet already shows gaps at 180 clients (mean 498, 353--830), the lowest
+%   target tested, and they grow with the target (3,458 at 260; 4,686 at 270; 11,781 at 300). So the question "which target is
+%   the first to show gaps" cannot be answered from these four targets for ENet; it is at or below 180. C++ is near 0 at
+%   180/270/300; its 260 mean of 147 comes from one run with 1,175 gaps (range 0--1,175), so report the median or mention the
+%   outlier. If you want to say where ENet starts to show gaps, the ladder (Test 1) is the better evidence.
 % TODO: interpret the holds at 180, 260, 270 and 300 clients (which target is the first to show gaps or ping growth)
 TODO: interpret the holds at every target.
 
@@ -1330,13 +1559,50 @@ Godot ENet & 300 & 99.3 & 252 (50--1474) & 31.2 (28.2--35.8) & 20.0 & 3 of 8 \\
 Both tests combine 8 complete runs per backend. For the ladder, each of the 292 client counts is paired with the same count in the other runs. For the holds, each 10~s state is paired by its position in the ramp-up or hold. The mean, lowest and highest value of each measure are reported. A ladder run passes at a client count if that count met the health limits; a hold run held if its hold averages met them. Hold run 5 needed a second attempt; its first attempt is not used.
 
 \section{Discussion}
+% [PROPOSAL] Sources: "Hypotheses and Goal Tree" (5.1), "Headless Mode and Engine Overhead", and the Aukstakalnis p.6 trade-off quote.
+%   Suggested points, in order:
+%   1. Hypotheses. H0: no significant difference in any metric at any client count. H1: comparable at low counts, a growing
+%      advantage for the C++ server at high counts. Say whether the data support H1, using the results above (ENet gaps appear and
+%      grow with load; C++ stays near zero; ping and tick rate are close). [CHECK] The proposal's counts (2--6 low, 30--50 high)
+%      do not match the tested range (up to 300); restate "low" and "high" in terms of what was tested. If no significance test is
+%      run (see the note in Experimental Method), do not use the word "significant".
+%   2. Why. The proposal's explanation is engine overhead (the ENet server runs physics, game logic and networking inside a full
+%      engine process). The ENet server's higher CPU use fits that, but it is not proven here; call it a likely explanation.
+%      Also link to the "Why more clients means much more work" and "How clients end up responding less" subsections.
+%   3. Trade-off. Aukstakalnis: ENet is convenient, custom UDP is flexible but takes much more time and knowledge. Add the cost side
+%      from your own experience: the C++ server is about 590 lines and had to reimplement join, eviction, snapshot splitting, and
+%      the tick timing bug (Section~\ref{sec:fixes}) that ENet/Godot handles for free.
+%   4. Threats to validity: ping proxy, protocol-level gaps, one cloud zone and machine type, bot clients, one simple workload,
+%      different client code paths for UDP versus ENet (the same script, but different transport calls).
+%   5. Future work: real players, other machine sizes, packet loss/latency injection, other engines or transports.
 % TODO: finish this (see next line)
 TODO.
 
 \section{Conclusion}
+% [PROPOSAL] Source: the proposal "Conclusion". It restates the setup (built-in ENet dedicated server vs custom C++ UDP server for
+%   a Godot game), what the literature established (UDP for real-time gameplay, C++ for low-overhead server work, dedicated-server
+%   topology), and the plan. Keep the structure (what was compared, what is known, what was found), but the plan sentence
+%   about "five client counts, three repetitions, 240 minutes" must be replaced with the real results and limits.
+% [NEW] Aim for one paragraph: what was built, what was measured, the main result with one or two numbers, and the practical advice
+%   for a Godot developer (when ENet is enough, when a custom server pays off).
 % TODO: finish this (see next line)
 TODO.
 
+% [PROPOSAL] The proposal's reference list has these entries that are NOT in the bibliography below yet. Suggested keys in brackets:
+%   - Ahde, "Real-Time Unity Multiplayer Server Implementation", bachelor's thesis, 2017 [ahde2017]  (Network topology)
+%   - Arboleda, Arias, Riveros, "Performance of Parallelism in Python and C++", IAENG Int. J. Computer Science 50(2), 2023, pp. 1--13 [arboleda2023]
+%   - Celik and Seckinti, "Network Optimizing Software Solution for Multiplayer Gaming", ITU J. Wireless Comm. and Cybersecurity 1(1), 2024, pp. 47--56 [celik2024]
+%   - GeeksforGeeks, "UDP Server-Client Implementation in C++", 2018 [geeksforgeeks2018]
+%   - Raysync, "Why Packet Loss Happens and How to Diagnose It", 2023 [raysync2023]   (weak source, see Background)
+%   - "Buffer Bloat and the Latency-Throughput Trade-off", Substack, 2025 [substack2025]   (weak source; author and URL are missing)
+%   - Zehra, Javed, Khan, Pasha, "Comparative Analysis of C++ and Python in Terms of Memory and Time", Preprints, 2020, doi:10.20944/preprints202012.0516.v1 [zehra2020]
+% In the proposal list but NOT cited in the proposal text (cite them or leave them out): Kehom's Forge (kehomsforge.com), Python docs
+%   "socketserver", Sudhi S "Rust vs Go vs Python vs C++" (Medium, 2025).
+% [CHECK] The existing entries are missing details the proposal has: Aukstakalnis (no venue/URL), Jones (full URL), Retunsky (Star Gazers/Medium URL and
+%   date), Godot docs (URLs and access date, 27 Feb 2026). Copy them from the proposal reference list. Also convert to BibTeX
+%   (\bibliographystyle + .bib) if the final paper has more than a dozen references; thebibliography is fine for this size.
+% [CHECK] Possible replacement for the weak queueing sources: Gettys and Nichols, "Bufferbloat: Dark Buffers in the Internet", ACM Queue, 2011.
+%   I have not verified this reference here; confirm it before adding it.
 \begin{thebibliography}{9}
 \bibitem{aukstakalnis2024} L. Aukstakalnis. \emph{Server-Client Networking Implementation Using the Godot Game Engine}. 2024.
 \bibitem{aldhief2018} F. T. Al-Dhief et al. Performance comparison between TCP and UDP protocols in different simulation
