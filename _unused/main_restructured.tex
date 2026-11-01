@@ -607,7 +607,7 @@ Both tests combine 8 complete runs per backend. For the ladder, each of the 292 
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{p{0.25\columnwidth}p{0.26\columnwidth}p{0.25\columnwidth}p{0.12\columnwidth}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.25\columnwidth}>{\raggedright\arraybackslash}p{0.26\columnwidth}>{\raggedright\arraybackslash}p{0.25\columnwidth}>{\raggedright\arraybackslash}p{0.12\columnwidth}}
 \toprule
 Problem & Why it mattered & Fix & Status \\
 \midrule
@@ -623,18 +623,21 @@ Slow ENet states and a last-state artifact & ENet rates were measured over longe
 Two changes were made in \texttt{server/main.cpp}. First, the next tick is scheduled at an exact multiple of 50~ms after the previous due time, so lateness does not add up. Second, the wait for packets now ends when the next tick is due (at most 5~ms), so ticks are noticed sooner. If the server ever falls more than a whole tick behind, it resynchronizes instead of firing a burst of ticks. Figure~\ref{lst:fixed} shows the code. In a 30-second local test the original server ticked at 19.67~Hz and the fixed server at 20.000~Hz.
 
 \begin{figure}[H]
-\begin{lstlisting}[language=C++]
-const auto tick_period = std::chrono::duration_cast<Clock::duration>(
-                             std::chrono::duration<double>(TICK_SEC));
+\begin{lstlisting}[language=C++,basicstyle=\ttfamily\scriptsize]
+const auto tick_period =
+    std::chrono::duration_cast<Clock::duration>(
+        std::chrono::duration<double>(TICK_SEC));
 auto next_tick = Clock::now() + tick_period;
 while (true) {
-    // ... wait for packets until next_tick (at most 5 ms) ...
+    // ... wait for packets until next_tick
+    //     (at most 5 ms) ...
     auto now = Clock::now();
     if (now >= next_tick) {
         next_tick += tick_period;
-        if (next_tick <= now)    // a whole tick behind: resync
-            next_tick = now + tick_period;
-        // ... tick: drop silent clients, broadcast snapshots ...
+        if (next_tick <= now)  // a whole tick
+            next_tick = now + tick_period;  // behind: resync
+        // ... tick: drop silent clients,
+        //     broadcast snapshots ...
     }
 }
 \end{lstlisting}
@@ -648,21 +651,7 @@ while (true) {
 \end{itemize}
 The last ladder state is left out of the corrected ladder plots and tables (Section~\ref{sec:ladder}).
 
-\section{Results}\label{sec:results}
-% [PROPOSAL] The proposal has no results. Its analysis plan (6.3) was: latency distribution per backend, packets per second,
-%   loss from sent versus received counts, bandwidth from Wireshark. Only the first two have a counterpart here; see the
-%   comparison table at the top of Experimental Method.
-
-\subsection{Test 1, progressive ladder: granular runs (both patches applied)}
-\label{sec:ladder}
-% [NEW] Things the tables already show (check them against the CSVs before you write them as findings):
-%   - C++ server: gaps are 0 at every selected count (run 8 had 5 gaps in total); 291--292 of 292 states passed in every run.
-%   - ENet server: gaps first appear around 150--200 clients (Table~\ref{tab:ladder}: 0 at 100, 10 at 200, 38 at 250, 116 at 300)
-%     and total 3,900--7,000 per run (Table~\ref{tab:limit}); ping and tick rate are close to C++ (tick about 20 Hz for both).
-%   - So "client limit" is not a single sharp number for either server in this data: all states mostly pass. Decide how to
-%     define it (e.g. first count with sustained gaps, or first failing state per run, 294 in ENet run 3) before writing.
-TODO: interpret the ladder results (latency, packet gaps, client limit, tick rate).
-
+%NOCLEARPAGE-Results
 \begin{figure}[!htbp]
 \centering
 {\bfseries\small Test 1: progressive ladder, 10 to 299 clients (mean of 8 runs, 10~s per client count)\par}\vspace{4pt}
@@ -711,9 +700,24 @@ TODO: interpret the ladder results (latency, packet gaps, client limit, tick rat
 \end{groupplot}
 \node[anchor=north] at ($(group c1r2.south east)!0.5!(group c2r2.south west)+(0,-1.5cm)$) {\footnotesize \textcolor{blue!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} C++ server \quad \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} ENet server \quad shaded band: lowest to highest run};
 \end{tikzpicture}
-\caption{Test 1, progressive ladder (granular batch, both patches applied; server on an e2-standard-2 VM, three n2-standard-4 client VMs, 10~s per client count; the 1-client warm-up state and the last state, 300 clients, are left out: the last state has no later state to time it by, so its counters cover a longer period than 10~s, see Section~\ref{sec:fixes}). Each line is the mean of 8 runs and the band spans the lowest to the highest run. The C++ server is driven by Godot UDP clients and the ENet server by Godot ENet clients. Ping is measured by the Godot client (time from its last send until a snapshot arrives), not a true round trip. Packet gaps are skipped snapshot numbers summed over all clients in a state. Dashed lines: 20 snapshots per second and the 18~Hz tick threshold. Clients responding was 100\% in every state and the server tick rate stayed between 19.9 and 20.1~Hz for both servers (Table~\ref{tab:ladder}), so those two panels are left out.}
+\caption{Test 1, progressive ladder (granular batch, both patches applied; server on an e2-standard-2 VM, three n2-standard-4 client VMs, 10~s per client count; the 1-client warm-up state and the last state, 300 clients, are left out: the last state has no later state to time it by, so its counters cover a longer period than 10~s, see Section~\ref{sec:fixes}). Each line is the mean of 8 runs and the band spans the lowest to the highest run. The C++ server is driven by Godot UDP clients and the ENet server by Godot ENet clients. Ping is measured by the Godot client (time from its last send until a snapshot arrives), not a true round trip. Packet gaps are skipped snapshot numbers summed over all clients in a state. Dashed line: 20 snapshots per second. Clients responding was 100\% in every state and the server tick rate stayed between 19.9 and 20.1~Hz for both servers (Table~\ref{tab:ladder}), so those two panels are left out.}
 \label{fig:ladder}
 \end{figure}
+
+\section{Results}\label{sec:results}
+% [PROPOSAL] The proposal has no results. Its analysis plan (6.3) was: latency distribution per backend, packets per second,
+%   loss from sent versus received counts, bandwidth from Wireshark. Only the first two have a counterpart here; see the
+%   comparison table at the top of Experimental Method.
+
+\subsection{Test 1, progressive ladder: granular runs (both patches applied)}
+\label{sec:ladder}
+% [NEW] Things the tables already show (check them against the CSVs before you write them as findings):
+%   - C++ server: gaps are 0 at every selected count (run 8 had 5 gaps in total); 291--292 of 292 states passed in every run.
+%   - ENet server: gaps first appear around 150--200 clients (Table~\ref{tab:ladder}: 0 at 100, 10 at 200, 38 at 250, 116 at 300)
+%     and total 3,900--7,000 per run (Table~\ref{tab:limit}); ping and tick rate are close to C++ (tick about 20 Hz for both).
+%   - So "client limit" is not a single sharp number for either server in this data: all states mostly pass. Decide how to
+%     define it (e.g. first count with sustained gaps, or first failing state per run, 294 in ENet run 3) before writing.
+TODO: interpret the ladder results (latency, packet gaps, client limit, tick rate).
 
 \begin{table}[H]
 \centering
@@ -815,7 +819,7 @@ TODO: interpret the 300-client hold.
 \end{groupplot}
 \node[anchor=north] at ($(group c1r2.south east)!0.5!(group c2r2.south west)+(0,-1.5cm)$) {\footnotesize \textcolor{blue!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} C++ server, Godot clients \quad \textcolor{red!70!black}{\rule[0.5ex]{1.2em}{1.2pt}} ENet server, ENet clients \quad band: 25th to 75th percentile};
 \end{tikzpicture}
-\caption{Test 2, hold at 300 clients (server on an e2-standard-2 VM, three n2-standard-4 client VMs). The clients are added first (ramp-up, 10 clients every 10~s) and the plot starts when the last client has joined; it then covers the 20-minute hold with no new clients. Each line is the median of 8 runs and the band spans the 25th to the 75th percentile. Packet gaps are skipped snapshot numbers summed over all clients in a 10~s window. Ping is the Godot client's ping proxy, not a true round trip. Dashed lines: 20 snapshots per second and the 18~Hz tick threshold. Clients responding was 100\% throughout and the median server tick rate stayed between 19.9 and 20.1~Hz for both servers (Table~\ref{tab:holdsum}), so those two panels are left out.}
+\caption{Test 2, hold at 300 clients (server on an e2-standard-2 VM, three n2-standard-4 client VMs). The clients are added first (ramp-up, 10 clients every 10~s) and the plot starts when the last client has joined; it then covers the 20-minute hold with no new clients. Each line is the median of 8 runs and the band spans the 25th to the 75th percentile. Packet gaps are skipped snapshot numbers summed over all clients in a 10~s window. Ping is the Godot client's ping proxy, not a true round trip. Dashed line: 20 snapshots per second. Clients responding was 100\% throughout and the median server tick rate stayed between 19.9 and 20.1~Hz for both servers (Table~\ref{tab:holdsum}), so those two panels are left out.}
 \label{fig:hold300}
 \end{figure}
 
@@ -828,8 +832,8 @@ TODO: interpret the holds at every target.
 \centering
 {\bfseries\small Test 2: hold at every target, gaps and latency (median of 8 runs)\par}\vspace{4pt}
 \begin{tikzpicture}
-\begin{groupplot}[group style={group size=2 by 4,horizontal sep=1.7cm,vertical sep=1.5cm},
-  width=0.5\textwidth,height=3.6cm,xmin=0,xmax=20,
+\begin{groupplot}[group style={group size=2 by 4,horizontal sep=1.7cm,vertical sep=1.3cm},
+  width=0.5\textwidth,height=3.1cm,xmin=0,xmax=20,
   tick label style={font=\scriptsize},label style={font=\footnotesize,align=center},
   title style={font=\footnotesize\bfseries},grid=major,grid style={gray!25}]
 \nextgroupplot[title={Packet gaps, 180 clients},ylabel={missed snapshots\\per state},ymin=0,ymax=160]
@@ -915,41 +919,23 @@ TODO: interpret the holds at every target.
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lrrrrrrrl@{}}
+\begin{tabular}{@{}lrrrrrrrlr@{}}
 \toprule
-Server & Clients & Ping, ms & Ping cert.\ (\%) & Gaps (20~min) & Gaps (\% of exp.) & Gaps cert.\ (\%) & Tick err.\ (\%) & Held \\
+Server & Clients & Ping, ms & Ping cert.\ (\%) & Gaps (20~min) & Gaps (\% of exp.) & Gaps cert.\ (\%) & Tick err.\ (\%) & Held & $p$ vs C++ \\
 \midrule
-C++ server & 180 & 32.1 (0.2) & 91 & 0 (0--1) & 0.0000 & n/a & 0.00 & 8 of 8 \\
-C++ server & 260 & 36.2 (0.3) & 90 & 0 (0--1175) & 0.0000 & n/a & 0.00 & 8 of 8 \\
-C++ server & 270 & 37.1 (0.3) & 91 & 0 (0--0) & 0.0000 & n/a & 0.00 & 8 of 8 \\
-C++ server & 300 & 39.1 (0.4) & 90 & 0 (0--8) & 0.0000 & n/a & 0.00 & 8 of 8 \\
+C++ server & 180 & 32.1 (0.2) & 91 & 0 (0--1) & 0.0000 & n/a & 0.00 & 8 of 8 & -- \\
+C++ server & 260 & 36.2 (0.3) & 90 & 0 (0--1175) & 0.0000 & n/a & 0.00 & 8 of 8 & -- \\
+C++ server & 270 & 37.1 (0.3) & 91 & 0 (0--0) & 0.0000 & n/a & 0.00 & 8 of 8 & -- \\
+C++ server & 300 & 39.1 (0.4) & 90 & 0 (0--8) & 0.0000 & n/a & 0.00 & 8 of 8 & -- \\
 \midrule
-ENet server & 180 & 31.4 (0.5) & 87 & 465 (353--830) & 0.0108 & 59 & 0.01 & 8 of 8 \\
-ENet server & 260 & 34.4 (0.4) & 89 & 3372 (3004--3771) & 0.0540 & 76 & 0.00 & 8 of 8 \\
-ENet server & 270 & 34.9 (0.2) & 91 & 4756 (3867--5031) & 0.0734 & 76 & 0.00 & 8 of 8 \\
-ENet server & 300 & 36.9 (0.4) & 89 & 11391 (9659--14963) & 0.1582 & 70 & 0.00 & 8 of 8 \\
+ENet server & 180 & 31.4 (0.5) & 87 & 465 (353--830) & 0.0108 & 59 & 0.01 & 8 of 8 & 0.00016 \\
+ENet server & 260 & 34.4 (0.4) & 89 & 3372 (3004--3771) & 0.0540 & 76 & 0.00 & 8 of 8 & 0.00016 \\
+ENet server & 270 & 34.9 (0.2) & 91 & 4756 (3867--5031) & 0.0734 & 76 & 0.00 & 8 of 8 & 0.00016 \\
+ENet server & 300 & 36.9 (0.4) & 89 & 11391 (9659--14963) & 0.1582 & 70 & 0.00 & 8 of 8 & 0.00016 \\
 \bottomrule
 \end{tabular}
-\caption{Hold results at each target, from the 8 runs (C++ server with Godot clients; ENet server with ENet clients). Each run is first averaged over its 20-minute hold. Ping shows the median of the 8 run averages with the standard deviation in brackets. Gaps = skipped snapshot numbers summed over all clients and the whole hold: median with the lowest and highest run in brackets; ``\% of exp.'' is the median divided by the snapshots expected (clients $\times$ 20 per second $\times$ 1200~s). Cert.\ = certainty (percent) from the 8 run values: one minus the normalized fractional uncertainty (coefficient of variation divided by $\sqrt{8}$) raised to the scaling factor 0.4; n/a where the median is 0. Tick err.\ = absolute fractional error of the mean server tick rate against the 20~Hz baseline. Every run at every target responded at 100\% and received 20 snapshots per client per second (19.96 to 20.00). A run ``held'' if its hold averages met the health limits (at least 99\% responding, at least 18 snapshots per second, ping at most 150~ms, tick at least 18~Hz).}
+\caption{Hold results at each target, from the 8 runs (C++ server with Godot clients; ENet server with ENet clients). Each run is first averaged over its 20-minute hold. Ping shows the median of the 8 run averages with the standard deviation in brackets. Gaps = skipped snapshot numbers summed over all clients and the whole hold: median with the lowest and highest run in brackets; ``\% of exp.'' is the median divided by the snapshots expected (clients $\times$ 20 per second $\times$ 1200~s). Cert.\ = certainty (percent) from the 8 run values: one minus the normalized fractional uncertainty (coefficient of variation divided by $\sqrt{8}$) raised to the scaling factor 0.4; n/a where the median is 0. Tick err.\ = absolute fractional error of the mean server tick rate against the 20~Hz baseline. Every run at every target responded at 100\% and received 20 snapshots per client per second (19.96 to 20.00). $p$ = exact two-sided Mann--Whitney $U$ test of the 8 ENet gap totals against the 8 C++ totals ($U=0$ at every target: every ENet run had more gaps than every C++ run; 0.00016 is the smallest $p$ possible with 8 runs per backend). A run ``held'' if its hold averages met the health limits (at least 99\% responding, at least 18 snapshots per second, ping at most 150~ms, tick at least 18~Hz).}
 \label{tab:holdsum}
-\end{table}
-
-\begin{table}[H]
-\centering
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}rrrrrr@{}}
-\toprule
-Clients & C++ gaps, median (IQR) & ENet gaps, median (IQR) & $U$ (C++ vs ENet) & $p$ (exact, two-sided) & $n$ per backend \\
-\midrule
-180 & 0 (0--0) & 465 (398--547) & 0 & 0.00016 & 8 \\
-260 & 0 (0--0) & 3372 (3358--3703) & 0 & 0.00016 & 8 \\
-270 & 0 (0--0) & 4756 (4683--4841) & 0 & 0.00016 & 8 \\
-300 & 0 (0--0) & 11391 (10820--12444) & 0 & 0.00016 & 8 \\
-\bottomrule
-\end{tabular}
-\caption{Mann--Whitney $U$ test on the per-run packet-gap totals of the 20-minute holds (8 runs per backend). IQR = 25th to 75th percentile of the 8 run values. $U$ counts the run pairs in which the C++ server had more gaps than the ENet server (ties count half); $U=0$ means every ENet run had more gaps than every C++ run. The exact two-sided $p$ comes from all $C(16,8)=12{,}870$ ways to split the 16 run values into two groups.}
-\label{tab:mwu}
 \end{table}
 
 \section{Discussion}

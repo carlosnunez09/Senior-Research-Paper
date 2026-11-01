@@ -1,25 +1,69 @@
-\documentclass[11pt]{article}
-\usepackage[margin=1in]{geometry}
+\newif\ifieee
+\IfFileExists{IEEEtran.cls}{\ieeetrue\documentclass[conference]{IEEEtran}}{\ieeefalse\documentclass[twocolumn,10pt]{article}}
+\ifieee\else\usepackage[margin=0.75in,columnsep=0.25in]{geometry}\fi
+\ifieee\else
+% Stand-in that imitates the IEEEtran look (used only when IEEEtran.cls is not installed)
+\usepackage{mathptmx}
+\usepackage[scaled=0.88]{helvet}
+\usepackage{titlesec}
+\usepackage[font=small,labelsep=period,justification=centering]{caption}
+\renewcommand{\thesection}{\Roman{section}}
+\renewcommand{\thesubsection}{\Alph{subsection}}
+\renewcommand{\thesubsubsection}{\arabic{subsubsection}}
+\renewcommand{\thetable}{\Roman{table}}
+\renewcommand{\figurename}{Fig.}
+\renewcommand{\tablename}{TABLE}
+\captionsetup[table]{labelsep=newline,labelfont=sc,textfont=normalfont,justification=centering}
+\titleformat{\section}{\centering\normalsize\scshape}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\itshape\normalsize}{\thesubsection.}{0.6em}{}
+\titleformat{\subsubsection}{\itshape\normalsize}{\thesubsubsection)}{0.5em}{}
+\titlespacing*{\section}{0pt}{10pt plus 2pt}{4pt}
+\titlespacing*{\subsection}{0pt}{8pt plus 2pt}{3pt}
+\titlespacing*{\subsubsection}{0pt}{6pt plus 2pt}{2pt}
+\renewenvironment{abstract}{\par\noindent\small\bfseries\itshape Abstract---\upshape}{\par\vspace{6pt}}
+\setlength{\parindent}{1em}
+\makeatletter\renewcommand{\p@subsection}{\thesection-}\renewcommand{\p@subsubsection}{\thesection-\thesubsection}\makeatother
+\raggedbottom
+\pagestyle{empty}
+\fi
 \usepackage[T1]{fontenc}
 \usepackage{listings}
 \lstset{basicstyle=\ttfamily\footnotesize,frame=single,breaklines=true,columns=fullflexible,keepspaces=true}
 \usepackage{booktabs}
 \usepackage{float}
-\usepackage{array}
+\usepackage{array}\usepackage{adjustbox}\usepackage{cite}
 \usepackage{pgfplots}
+\usepackage{xcolor}
 \usetikzlibrary{arrows.meta,decorations.pathreplacing,calc,shapes.geometric}
 \usepgfplotslibrary{groupplots,fillbetween}
 \pgfplotsset{compat=1.18}
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
 \usepackage{xurl}
 \emergencystretch=3em
+\renewcommand{\floatpagefraction}{0.8}
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\dbltopfraction}{0.95}
+\renewcommand{\dblfloatpagefraction}{0.85}
+\setcounter{topnumber}{3}\setcounter{bottomnumber}{2}\setcounter{totalnumber}{6}\setcounter{dbltopnumber}{3}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}\setlength{\floatsep}{8pt plus 2pt minus 2pt}\setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\setlength{\abovecaptionskip}{3pt}\setlength{\belowcaptionskip}{0pt}
 
 \title{Custom UDP Server vs.\ Godot ENet:\\[0.5ex]A Cloud Benchmark of Multiplayer Server Capacity}
-\author{Carlos L. Nunez\\
-Department of Computer Science and Engineering, Shippensburg University\\
-Mentor: Dr.\ Girard\\
-CSC 499 -- Senior Research Methods}
-\date{Fall 2026 (draft)}
+\ifieee
+\author{\IEEEauthorblockN{Carlos L.\ Nunez}
+\IEEEauthorblockA{Department of Computer Science and Engineering\\
+Shippensburg University, Shippensburg, Pennsylvania, USA\\
+Mentor: Dr.\ Girard \quad CSC 499 -- Senior Research Methods\\
+Fall 2026 (draft)}}
+\else
+\author{Carlos L.\ Nunez\\
+Department of Computer Science and Engineering, Shippensburg University, Shippensburg, Pennsylvania, USA\\
+Mentor: Dr.\ Girard, CSC 499 -- Senior Research Methods\\
+Fall 2026 (draft)}
+\date{}
+\fi
 
 \begin{document}
 % ======================================================================================
@@ -67,8 +111,10 @@ clients. We measure latency, packet handling (snapshots received per client per 
 % TODO: write the results sentences from the granular ladder runs (the hold results are in Sections~\ref{sec:hold300} and~\ref{sec:holdall}) (see next line)
 tick rate. TODO: write the results sentences from the granular ladder runs (the hold results are in Sections~\ref{sec:hold300} and~\ref{sec:holdall}).
 \end{abstract}
+\ifieee\begin{IEEEkeywords}
+game networking, UDP, ENet, Godot, tick rate, server capacity, benchmarking
+\end{IEEEkeywords}\else\par\noindent\small\textbf{\textit{Index Terms}---}game networking, UDP, ENet, Godot, tick rate, server capacity, benchmarking\par\fi
 
-\noindent\textbf{Keywords:} game networking, UDP, ENet, Godot, tick rate, server capacity, benchmarking
 
 
 
@@ -167,9 +213,10 @@ TODO: write the background (servers and transport, related work).
 TODO: write what a tick and a snapshot are.
 
 \begin{table}[H]
+\caption{Terms used in this paper.}\label{tab:terms}
 \centering
-\small
-\begin{tabular}{@{}p{0.2\textwidth}p{0.72\textwidth}@{}}
+\footnotesize
+\begin{tabular}{@{}p{0.22\columnwidth}p{0.70\columnwidth}@{}}
 \toprule
 Term & Meaning in NodeStrike \\
 \midrule
@@ -181,10 +228,9 @@ Gap / loss & Each snapshot has a sequence number; a missing number means a snaps
 Effective tick rate & Ticks the server actually completes per second. Healthy $\approx 20$~Hz; below 18~Hz is treated as overloaded. \\
 \bottomrule
 \end{tabular}
-\caption{Terms used in this paper.}\label{tab:terms}
 \end{table}
 %this is where i keep the scemeatic of server ticks
-\begin{figure}[H]
+\begin{figure*}[!t]
 \centering
 \begin{tikzpicture}[x=0.052cm,y=1cm,font=\footnotesize]
 \tikzset{work/.style={fill=blue!45,draw=blue!70!black},
@@ -235,7 +281,7 @@ the number of clients and passes 50~ms (panel~C), the snapshot still leaves at t
 stays near 20~Hz, but the work is unfinished, so the snapshots carry less up-to-date
 information and clients see worse ping and more gaps.}
 \label{fig:tickvisual}
-\end{figure}
+\end{figure*}
 
 \section{Making of the Godot Client and ENet Server}
 % [PROPOSAL] Sources: "System Architecture", "Class and component inventory", "Headless Mode and Engine Overhead",
@@ -272,7 +318,7 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize,
+\begin{adjustbox}{max width=\columnwidth}\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize,
   box/.style={draw,rounded corners=3pt,align=center,inner sep=5pt,minimum height=1.1cm},
   arr/.style={-{Stealth},thick}]
 \node[box,fill=blue!8,minimum width=3.0cm,minimum height=3.2cm] (main) at (0,0) {\textbf{main.gd}\\ one Godot project,\\ every role};
@@ -283,7 +329,7 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \foreach \m in {m1,m2,m3} {\draw[arr] (main.east) -- (\m.west);}
 \draw[arr,orange!70!black] (m1.east) -- (cpp.west) node[midway,above,font=\scriptsize] {UDP};
 \draw[arr,orange!70!black] (m2.south) -- (m3.north) node[midway,right,font=\scriptsize] {ENet};
-\end{tikzpicture}
+\end{tikzpicture}\end{adjustbox}
 \caption{The Godot project. One script is started in different modes. A UDP client talks to the separate C++ server; an ENet client talks to the same project started as an ENet server.}
 \end{figure}
 
@@ -313,7 +359,7 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=0.8,transform shape,font=\footnotesize,
+\begin{adjustbox}{max width=\columnwidth}\begin{tikzpicture}[scale=0.8,transform shape,font=\footnotesize,
   note/.style={draw,rounded corners=3pt,fill=blue!6,align=left,inner sep=4pt},
   arr/.style={-{Stealth},thick,blue!60!black}]
 \begin{scope}
@@ -327,13 +373,13 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \draw[arr] (n1.west) -- (7.9,0.6);
 \draw[arr] (n3.west) -- (8.4,-0.75);
 \draw[arr] (n2.west) -- (8.8,-8.4);
-\end{tikzpicture}
+\end{tikzpicture}\end{adjustbox}
 \caption{The Godot client the moment it joins (a redrawing of the NodeStrike window). The board is the 20×20 grid; the only player in view is the client's own.}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=0.8,transform shape,font=\footnotesize,
+\begin{adjustbox}{max width=\columnwidth}\begin{tikzpicture}[scale=0.8,transform shape,font=\footnotesize,
   note/.style={draw,rounded corners=3pt,fill=blue!6,align=left,inner sep=4pt},
   arr/.style={-{Stealth},thick,blue!60!black}]
 \begin{scope}
@@ -357,7 +403,7 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \draw[arr] (c.west) -- (5.75,-3.74);
 \draw[arr] (e.west) -- (4.4,-4.62);
 \draw[arr] (d.west) -- (7.05,-6.82);
-\end{tikzpicture}
+\end{tikzpicture}\end{adjustbox}
 \caption{The running NodeStrike client (redrawn from a screenshot of a client started in a window; headless benchmark clients draw nothing). Each tick every bot moves one tile toward its goal. The server's snapshot tells each client where every other player is; the client only draws it. Each player's pale hollow square is that player's goal.}
 \end{figure}
 
@@ -388,7 +434,7 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
   \textcolor{nspink}{5} & 12 & 8 & 18 & 1\\
   \end{tabular}}
 
-\begin{figure}[H]
+\begin{figure*}[!t]
 \centering
 \begin{tikzpicture}[font=\footnotesize,
   big/.style={-{Stealth},line width=1.4pt,orange!70!black},
@@ -421,9 +467,9 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \node[font=\scriptsize,align=center] at (7.5,-6.6) {same rows,\\ same tick};
 \end{tikzpicture}
 \caption{Server and client side by side (redrawn). The server keeps every player in a table (a Godot Dictionary, id $\rightarrow$  position and goal). Every tick it packs the table into bytes and sends it. Each client unpacks the bytes into its own table of the same name and draws it, so the two screens show the same players and follow each other, about one network trip apart. The client's only extra is the white outline on its own square. Going the other way, each client sends only its own row.}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[H]
+\begin{figure*}[!t]
 \centering
 \begin{tikzpicture}[x=0.78cm,y=1cm,font=\footnotesize,
   cell/.style={draw,minimum height=0.8cm,inner sep=0pt,align=center,font=\scriptsize}]
@@ -462,7 +508,7 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \node[font=\scriptsize,gray,anchor=north west,text width=15.5cm] at (-1.4,-6.3) {The ENet and Godot header sizes are not measured here. The C++ server sends the same snapshot with its own 16-byte header directly after UDP.};
 \end{tikzpicture}
 \caption{How one snapshot is packed (ENet backend, default binary format). The server writes the header and then one 12-byte block per player into one byte array with \texttt{encode\_u32}/\texttt{encode\_u16} and sends it as a remote procedure call. The client reads the same positions back with \texttt{decode\_u32}/\texttt{decode\_u16}. The alternative \texttt{--enet-snapshot=variant} sends the same rows as a list of dictionaries, with the keys \texttt{id, x, y, gx, gy} sent as text each time.}
-\end{figure}
+\end{figure*}
 
 \newcommand{\draftmark}{\textcolor{red!70!black}{\textbf{[DRAFT]}}}
 
@@ -518,16 +564,18 @@ TODO: write how the C++ server was built (goals, design decisions, problems you 
 \begin{itemize}
 \item One file, \texttt{server/main.cpp} (about 590 lines), C++17, plain POSIX sockets, one thread.
 \item Binary protocol, version 2 (Table~\ref{tab:packets}). A player is identified by its network address, not by anything the client sends.
-\item Main loop (Figure~\ref{fig:cppLoop}): wait for a packet (until the next tick is due, at most 5~ms), read everything waiting, and when the next tick is due, run it.
+\item Main loop (Fig.~\ref{fig:cppLoop}): wait for a packet (until the next tick is due, at most 5~ms), read everything waiting, and when the next tick is due, run it.
 \item A tick drops clients silent for more than 5~s and sends a snapshot to every client, split into datagrams of at most 1,200 bytes.
 \item Once a second it prints one telemetry line (tick number, players, packets and bytes in and out); the benchmark records these lines.
 \item A separate terminal display, \texttt{tui/tui.cpp}, exists for watching a server.
 \end{itemize}
 
 \begin{table}[H]
+\caption{Messages of the C++ server protocol (version 2). Snapshots larger than 1,200 bytes are split into several datagrams.}
+\label{tab:packets}
 \centering
-\small
-\begin{tabular}{@{}llrl@{}}
+\footnotesize
+\begin{adjustbox}{max width=\columnwidth}\begin{tabular}{@{}llrl@{}}
 \toprule
 Message & Direction & Size & Contents \\
 \midrule
@@ -536,14 +584,12 @@ ACK & server to client & 6 B & type, version, player id \\
 STATE & client to server & 18 B & position, timestamp, number, goal \\
 TICK (snapshot) & server to client & 16 + 12N B & header, then id, position and goal for each of N players \\
 \bottomrule
-\end{tabular}
-\caption{Messages of the C++ server protocol (version 2). Snapshots larger than 1,200 bytes are split into several datagrams.}
-\label{tab:packets}
+\end{tabular}\end{adjustbox}
 \end{table}
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize,
+\begin{adjustbox}{max width=\columnwidth}\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize,
   box/.style={draw,rounded corners=3pt,align=center,inner sep=5pt,text width=7.4cm,minimum height=0.9cm},
   dec/.style={draw,diamond,aspect=3,align=center,inner sep=1pt,fill=gray!10},
   arr/.style={-{Stealth},thick}]
@@ -558,7 +604,7 @@ TICK (snapshot) & server to client & 16 + 12N B & header, then id, position and 
 \draw[arr] (d) -- (e);
 \draw[arr] (c.east) -- ++(2.6,0) |- (a.east) node[pos=0.2,above,font=\scriptsize] {no};
 \draw[arr] (e.west) -- ++(-0.6,0) |- (a.west);
-\end{tikzpicture}
+\end{tikzpicture}\end{adjustbox}
 \caption{Main loop of the C++ server. It repeats forever on one thread.}\label{fig:cppflow}
 \label{fig:cppLoop}
 \end{figure}
@@ -578,7 +624,9 @@ TICK (snapshot) & server to client & 16 + 12N B & header, then id, position and 
 % TODO: write how the two servers work and how they differ (see next line)
 TODO: write how the two servers work and how they differ.
 
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{The two backends side by side.}
+\label{tab:compare}
 \centering
 \small
 \begin{tabular}{@{}p{0.2\textwidth}p{0.36\textwidth}p{0.36\textwidth}@{}}
@@ -596,11 +644,9 @@ Latency measure & game client's ping: last send until next snapshot & same Godot
 Telemetry & one line per second & periodic server statistics \\
 \bottomrule
 \end{tabular}
-\caption{The two backends side by side.}
-\label{tab:compare}
-\end{table}
+\end{table*}
 
-\begin{figure}[H]
+\begin{figure*}[!t]
 \centering
 \begin{tikzpicture}[x=1cm,y=1cm,font=\small]
 \tikzset{msg/.style={-{Stealth},thick},
@@ -633,16 +679,16 @@ it is, the server replies with where everyone is, and this repeats 20 times a
 second. Ping is how long it takes to hear back; a lost reply shows up as a missing
 number. The ENet backend does the same thing through Godot's own networking.}
 \label{fig:flow}
-\end{figure}
+\end{figure*}
 
 \subsection{One tick, step by step}
 Every 50~ms the server does the same five things, in this order. If steps 1 to 4
 take less than 50~ms, it waits for the next tick. If they take longer, the next
 tick starts late.
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-\begin{tikzpicture}[x=1cm,y=1cm,font=\small,
+\begin{adjustbox}{max width=\columnwidth}\begin{tikzpicture}[x=1cm,y=1cm,font=\small,
   stepbox/.style={draw,rounded corners=2pt,fill=blue!8,minimum width=7.2cm,minimum height=0.8cm,align=left,inner sep=5pt},
   waitbox/.style={draw,rounded corners=2pt,fill=gray!15,minimum width=7.2cm,minimum height=0.8cm,align=left,inner sep=5pt},
   down/.style={-{Stealth},thick}]
@@ -654,7 +700,7 @@ tick starts late.
 \foreach \p/\q in {a/b,b/c,c/d,d/e} {\draw[down] (\p.south) -- (\q.north);}
 \draw[down,gray!60!black] (e.east) -- ++(1.0,0) |- (a.east) node[pos=0.25,right,align=left,font=\footnotesize] {repeat\\ 20 times\\ a second};
 \draw[decorate,decoration={brace,amplitude=5pt,mirror}] (-3.8,0.4) -- (-3.8,-4.3) node[midway,left=7pt,align=right,font=\footnotesize] {must fit in\\ 50 ms};
-\end{tikzpicture}
+\end{tikzpicture}\end{adjustbox}
 \caption{The server tick. Steps 1 to 4 are the work; step 5 is spare time. The
 more clients there are, the longer steps 3 and 4 take.}
 \end{figure}
@@ -662,14 +708,14 @@ more clients there are, the longer steps 3 and 4 take.}
 \subsection{Why more clients means much more work}
 Each snapshot lists every player, and every client gets one. So when the number of
 clients $N$ doubles, each snapshot gets about twice as big and there are twice as
-many to send: the work grows about four times. Figure~\ref{fig:growth} shows the
+many to send: the work grows about four times. Fig.~\ref{fig:growth} shows the
 amount of data this means for the C++ server (snapshot of $16 + 12N$ bytes sent to
 $N$ clients, 20 times a second).
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-\begin{tikzpicture}
-\begin{axis}[width=0.7\textwidth,height=5.5cm,xlabel={clients},ylabel={data sent per second (MB)},
+\begin{adjustbox}{max width=\columnwidth}\begin{tikzpicture}
+\begin{axis}[width=0.9\columnwidth,height=5.5cm,xlabel={clients},ylabel={data sent per second (MB)},
   xmin=0,xmax=300,ymin=0,ymax=24,grid=major,grid style={gray!25},
   tick label style={font=\scriptsize},label style={font=\footnotesize}]
 \addplot[blue!70!black,thick,domain=0:300,samples=60]{20*x*(16+12*x)/1000000};
@@ -677,7 +723,7 @@ $N$ clients, 20 times a second).
   every node near coord/.append style={font=\scriptsize,anchor=south east}]
   coordinates {(100,2.43) (200,9.66) (300,21.7)};
 \end{axis}
-\end{tikzpicture}
+\end{tikzpicture}\end{adjustbox}
 \caption{Data the server must send each second as clients are added (calculated
 from the packet format; ENet is similar). Tripling the clients from 100 to 300
 multiplies the data about nine times.}
@@ -688,12 +734,12 @@ multiplies the data about nine times.}
 A client counts as \textit{responding} if it received at least one new snapshot during the
 measurement period. While the server keeps up, every client gets a snapshot every
 tick. Once the work per tick is too much, snapshots arrive late, get skipped, or
-pile up behind each other, and some clients stop receiving any. Figure~\ref{fig:chain}
-shows the chain of events, and Figure~\ref{fig:arrivals} shows what one client sees.
+pile up behind each other, and some clients stop receiving any. Fig.~\ref{fig:chain}
+shows the chain of events, and Fig.~\ref{fig:arrivals} shows what one client sees.
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize,
+\begin{adjustbox}{max width=\columnwidth}\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize,
   box/.style={draw,rounded corners=2pt,text width=5.2cm,minimum height=1.0cm,align=center,inner sep=4pt},
   good/.style={box,fill=green!12},bad/.style={box,fill=red!12},
   down/.style={-{Stealth},thick}]
@@ -711,13 +757,13 @@ shows the chain of events, and Figure~\ref{fig:arrivals} shows what one client s
 \draw[-{Stealth},thick,dashed] (g1.east) -- (b1.west);
 \node[font=\scriptsize] at (0.1,0.45) {add clients};
 \draw[-{Stealth},thick,dashed] (b4.south) -- ++(0,-0.6) -| (g4.south) node[pos=0.25,below,font=\scriptsize] {remove clients: backlog clears, clients recover};
-\end{tikzpicture}
+\end{tikzpicture}\end{adjustbox}
 \caption{Left: a server that keeps up. Right: how adding clients leads to fewer
 clients responding. The dashed arrows show that removing load reverses it.}
 \label{fig:chain}
 \end{figure}
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \begin{tikzpicture}[x=0.026cm,y=1cm,font=\footnotesize,
   got/.style={circle,fill=green!55!black,inner sep=2.2pt},
@@ -746,7 +792,7 @@ the server should send every 50~ms. Healthy: all arrive on time. Struggling: som
 come late and bunched together, others never arrive. Not responding: none arrive,
 so the client is counted as not responding.}
 \label{fig:arrivals}
-\end{figure}
+\end{figure*}
 
 \section{Experimental Method}\label{sec:data}
 % [PROPOSAL] Sources: "Experiment Design" (6.1 Procedure, 6.2 Variable and control, 6.3 Data Analysis and Measurement) and
@@ -787,7 +833,8 @@ network use, server counters and every other column collected) is kept and still
 it is used to explain why the main measures change. A tick-rate drop is the warning sign
 that one of the three is failing.
 
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{The three main measures, and the tick-rate warning sign. All other collected data supports them.}
 \centering
 \small
 \begin{tabular}{@{}p{0.2\textwidth}p{0.36\textwidth}p{0.31\textwidth}@{}}
@@ -800,8 +847,7 @@ Client limit & The largest number of clients the server supports before performa
 Tick rate (warning sign) & Ticks the server completes per second. 20 Hz is healthy; below 18 Hz means the server is falling behind. & Server ticks per second, with an 18~Hz line \\
 \bottomrule
 \end{tabular}
-\caption{The three main measures, and the tick-rate warning sign. All other collected data supports them.}
-\end{table}
+\end{table*}
 
 
 \subsection{Two kinds of test}
@@ -819,9 +865,9 @@ measured in 120 windows of 10~s. Question: does the server stay stable at a
 fixed load?
 \end{itemize}
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize]
+\begin{adjustbox}{max width=\columnwidth}\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize]
 \tikzset{ax/.style={->,thick}}
 \begin{scope}
 \node[anchor=west,font=\bfseries\footnotesize] at (0,4.2) {Progressive ladder};
@@ -846,7 +892,7 @@ fixed load?
 \node[anchor=south,align=center] at (4.3,2.85) {\scriptsize hold 20 min = 120 windows};
 \node[anchor=west] at (2.5,1.5) {\scriptsize target held, no new clients};
 \end{scope}
-\end{tikzpicture}
+\end{tikzpicture}\end{adjustbox}
 \caption{The two kinds of test (schematic). The ladder keeps adding clients
 and shows where performance breaks. The hold stops at a target and shows
 whether performance stays steady.}
@@ -854,7 +900,7 @@ whether performance stays steady.}
 
 
 \subsection{How the data is collected}
-Figure~\ref{fig:fleet} shows where a test runs. A Python script automates every run:
+Fig.~\ref{fig:fleet} shows where a test runs. A Python script automates every run:
 
 \begin{enumerate}
 \item It creates one server VM and three client VMs on Google Cloud.
@@ -872,7 +918,7 @@ deleted, and analysis scripts merge the repetitions and apply pass/fail
 thresholds.
 \end{enumerate}
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize,
   vm/.style={draw,rounded corners=3pt,fill=blue!8,minimum width=3.0cm,minimum height=1.5cm,align=center,inner sep=4pt},
@@ -910,7 +956,7 @@ and downloads the results afterwards. The bots and the server talk to each other
 over the cloud's private network (a switch). Each client VM runs about a third of
 the bots, so the server sees all of them as one crowd.}
 \label{fig:fleet}
-\end{figure}
+\end{figure*}
 
 Gaps and incomplete snapshots are indicators of protocol-level loss, not
 measured network packet-loss percentages.
@@ -948,7 +994,9 @@ TODO: write the pass/fail limits and what the measurements can and cannot show.
 % TODO: write the precision limit for each quantity and name the limiting proposition (verify the granularities below)
 TODO: write the precision limits.
 
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{Granularity of each measured quantity. The precision limit of a conclusion is set by the coarsest quantity it relies on.}
+\label{tab:precision}
 \centering
 \footnotesize
 \begin{tabular}{@{}llp{6.2cm}@{}}
@@ -963,16 +1011,15 @@ Clients responding & 1 client & Whole clients. \\
 CPU & 0.1~\% & Sampled once per second and averaged over the window. \\
 \bottomrule
 \end{tabular}
-\caption{Granularity of each measured quantity. The precision limit of a conclusion is set by the coarsest quantity it relies on.}
-\label{tab:precision}
-\end{table}
+\end{table*}
 
 \subsection{Runs}
 
 Granular ramps with $N_{\max}=300$ give 292 states per backend
 ($1$ plus $10$ through $300$).
 
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{Runs used in the results. The progressive ladder is eight complete runs per backend, each run a separate pass from 1 to 300 clients (one repetition each). The C++ server is driven by Godot UDP clients and the ENet server by Godot ENet clients. The hold tests are eight runs per backend and target, each a 20-minute hold (one repetition each) after a ramp-up of 10 clients per 10~s.}
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3pt}
@@ -984,8 +1031,7 @@ Oct 23--24 & Progressive ladder (granular) & C++ server, ENet server & 1, 10--30
 Oct 24 & Hold & C++ server, ENet server & 180, 260, 270, 300 & 20~min hold & 8 runs & ok \\
 \bottomrule
 \end{tabular}
-\caption{Runs used in the results. The progressive ladder is eight complete runs per backend, each run a separate pass from 1 to 300 clients (one repetition each). The C++ server is driven by Godot UDP clients and the ENet server by Godot ENet clients. The hold tests are eight runs per backend and target, each a 20-minute hold (one repetition each) after a ramp-up of 10 clients per 10~s.}
-\end{table}
+\end{table*}
 
 
 \section{Problems Found in the First Runs, and How They Were Fixed}\label{sec:fixes}
@@ -995,7 +1041,8 @@ Oct 24 & Hold & C++ server, ENet server & 180, 260, 270, 300 & 20~min hold & 8 r
 After the first complete set of runs we found two problems that made the comparison between the C++ and the ENet server unfair, plus some measurement quirks. This section explains, for each one, what it was, why it happened, how it was fixed, and what it means for the first-round data. The first-round results in Section~\ref{sec:results} are kept for reference and are superseded: the corrected data (8 progressive-ladder runs and 8 hold runs per backend, with the patches below applied) is in Section~\ref{sec:results}.
 
 \subsection{Overview}
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{The problems found in the first runs.}
 \centering
 \small
 \begin{tabular}{p{0.2\textwidth}p{0.28\textwidth}p{0.26\textwidth}p{0.16\textwidth}}
@@ -1007,8 +1054,7 @@ Snapshot sizes differed (8 vs 16 header bytes) & ENet sent slightly smaller pack
 Slow ENet states and a last-state artifact & ENet rates were measured over longer windows; the last ladder state was inflated & To be handled in the analysis & Noted \\
 \bottomrule
 \end{tabular}
-\caption{The problems found in the first runs.}
-\end{table}
+\end{table*}
 
 \subsection{Problem 1: the C++ tick drifted below 20~Hz}
 
@@ -1019,9 +1065,9 @@ Both servers are meant to tick at 20~Hz. In the first round the ENet server tick
 The C++ loop starts a tick as soon as it notices that 50~ms have passed, and then restarts its timer from that moment. If it notices 2~ms late, the next 50~ms are counted from the late moment, so the delay is never made up and each tick is 52~ms after the last. In one second that is $1000/52 \approx 19.2$ ticks instead of 20. With more clients each pass through the loop does more work, so the check for the next tick comes later and the drift grows. In the measured data the tick falls from about 51.5~ms (about 1.5~ms late) with few clients to about 52.9~ms (about 2.9~ms late) at 300 clients. The ENet server uses a Godot timer, which keeps its timetable, so it does not drift.
 
 \subsubsection{The drift in one picture}
-Figure~\ref{fig:drift} counts the ticks of both servers side by side. Each dot is one tick and the number is the tick count.
+Fig.~\ref{fig:drift} counts the ticks of both servers side by side. Each dot is one tick and the number is the tick count.
 
-\begin{figure}[H]
+\begin{figure*}[!t]
 \centering
 \begin{tikzpicture}[x=0.0145cm,y=1cm,font=\footnotesize,
   cpp/.style={circle,fill=red!65!black,inner sep=1.6pt},
@@ -1048,7 +1094,7 @@ Figure~\ref{fig:drift} counts the ticks of both servers side by side. Each dot i
 \end{tikzpicture}
 \caption{Counting ticks, C++ against ENet (schematic, each tick noticed 2~ms late). Every dot is one tick and the number is the tick count. The C++ loop restarts its stopwatch at each tick, so its ticks are 52~ms apart and it has counted only 19 ticks after one second. The Godot timer keeps its 50~ms timetable, so its tick 20 arrives at exactly 1000~ms. After 10 ticks the C++ server is already 20~ms behind, and the gap keeps growing.}
 \label{fig:drift}
-\end{figure}
+\end{figure*}
 
 \subsubsection{A worked example}
 Say every tick is noticed 2~ms late.
@@ -1058,7 +1104,7 @@ Say every tick is noticed 2~ms late.
 \end{itemize}
 
 \subsubsection{The code behind it}\label{sec:codebehind}
-Figure~\ref{lst:tick} shows the real tick check from the first version of the C++ server and Figure~\ref{lst:pseudo} explains it in pseudocode. The line that causes the drift is \texttt{last\_tick = now;}.
+Fig.~\ref{lst:tick} shows the real tick check from the first version of the C++ server and Fig.~\ref{lst:pseudo} explains it in pseudocode. The line that causes the drift is \texttt{last\_tick = now;}.
 
 \begin{figure}[H]
 \begin{lstlisting}[language=C++]
@@ -1079,7 +1125,7 @@ last_tick += std::chrono::duration_cast<Clock::duration>(
 \label{lst:tick}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure*}[!t]
 \begin{lstlisting}[language={}]
 STOPWATCH (first C++ version)        TIMETABLE (Godot timer / the fix)
 -------------------------------     ---------------------------------
@@ -1093,10 +1139,10 @@ Timetable: noticed at 52 ms -> next tick due at 50 + 50 = 100 ms (on schedule).
 \end{lstlisting}
 \caption{Pseudocode for the two ways of timing a tick. Think of a bus that should leave every 50 minutes: the stopwatch driver restarts his watch whenever he notices the bus is due, so any lateness is kept; the timetable driver follows fixed times, so lateness is not kept.}
 \label{lst:pseudo}
-\end{figure}
+\end{figure*}
 
 \subsubsection{The fix}\label{sec:thefix}
-Two changes were made in \texttt{server/main.cpp}. First, the next tick is scheduled at an exact multiple of 50~ms after the previous due time, so lateness does not add up. Second, the wait for packets now ends when the next tick is due (at most 5~ms), so ticks are noticed sooner. If the server ever falls more than a whole tick behind, it resynchronizes instead of firing a burst of ticks. Figure~\ref{lst:fixed} shows the real code, including the resynchronization check.
+Two changes were made in \texttt{server/main.cpp}. First, the next tick is scheduled at an exact multiple of 50~ms after the previous due time, so lateness does not add up. Second, the wait for packets now ends when the next tick is due (at most 5~ms), so ticks are noticed sooner. If the server ever falls more than a whole tick behind, it resynchronizes instead of firing a burst of ticks. Fig.~\ref{lst:fixed} shows the real code, including the resynchronization check.
 
 \begin{figure}[H]
 \begin{lstlisting}[language=C++]
@@ -1130,7 +1176,7 @@ while (true) {
 \end{figure}
 
 \newcommand{\hl}[2]{\colorbox{#1}{\strut#2}}
-\begin{figure}[H]
+\begin{figure*}[!t]
 \centering
 \begin{minipage}[t]{0.48\textwidth}
 \textbf{\small Before (Section~\ref{sec:codebehind}): stopwatch}\par\smallskip
@@ -1162,9 +1208,9 @@ now = Clock::now();
 \end{minipage}
 \par\smallskip
 {\small\colorbox{red!30}{\strut~removed~}\quad\colorbox{yellow!40}{\strut~changed~}\quad\colorbox{green!30}{\strut~new~}}
-\caption{The old and the fixed tick loop side by side (simplified from Figures~\ref{lst:tick} and~\ref{lst:fixed}). The red line is the one that causes the drift: it restarts the stopwatch at the moment the tick was noticed. The green lines schedule the next tick from the previous due time, and resynchronize if the server falls a whole tick behind.}
+\caption{The old and the fixed tick loop side by side (simplified from Figs.~\ref{lst:tick} and~\ref{lst:fixed}). The red line is the one that causes the drift: it restarts the stopwatch at the moment the tick was noticed. The green lines schedule the next tick from the previous due time, and resynchronize if the server falls a whole tick behind.}
 \label{lst:diff}
-\end{figure}
+\end{figure*}
 
 \subsubsection{Result of the fix}
 In a 30-second local test the original server ticked at 19.67~Hz and the fixed server at 20.000~Hz. How this changes the cloud results will be reported with the corrected runs.
@@ -1173,9 +1219,11 @@ In a 30-second local test the original server ticked at 19.67~Hz and the fixed s
 Both servers send every client a snapshot of all players, 12 bytes per player, plus a header. The C++ header was 16 bytes and the ENet binary header only 8, so each C++ snapshot was 8 bytes larger. The difference is tiny (Table~\ref{tab:snapsize}) but it is an unnecessary difference between the two backends, so the ENet header was padded to 16 bytes (bytes 8 to 15 are reserved and zero; the first 8 bytes are unchanged). Both transports now send 16 + 12N bytes.
 
 \begin{table}[H]
+\caption{Size of one snapshot sent to one client.}
+\label{tab:snapsize}
 \centering
-\small
-\begin{tabular}{rrrr}
+\footnotesize
+\begin{adjustbox}{max width=\columnwidth}\begin{tabular}{rrrr}
 \toprule
 Players N & C++ (bytes) & ENet before (bytes) & ENet now (bytes) \\
 \midrule
@@ -1183,9 +1231,7 @@ Players N & C++ (bytes) & ENet before (bytes) & ENet now (bytes) \\
 200 & 2,416 & 2,408 & 2,416 \\
 300 & 3,616 & 3,608 & 3,616 \\
 \bottomrule
-\end{tabular}
-\caption{Size of one snapshot sent to one client.}
-\label{tab:snapsize}
+\end{tabular}\end{adjustbox}
 \end{table}
 
 \subsection{Measurement quirks noticed}
@@ -1204,7 +1250,7 @@ The last ladder state is left out of the corrected ladder plots and tables (Sect
 \textbf{Status (31 October 2026):} both fixes are applied, and the corrected data (8 progressive-ladder runs and 8 hold runs per backend) is in Section~\ref{sec:results}; only the first-round example data is still superseded.
 
 \newcommand{\superseded}{\par\noindent\fcolorbox{red!60!black}{red!12}{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{\textbf{SUPERSEDED.} First-round data, kept for reference. Replaced by the granular runs in Section~\ref{sec:ladder}; the hold tests will be redone with the corrected servers.}}\par\medskip}
-\section{Results}\label{sec:results}
+\clearpage\section{Results}\label{sec:results}
 % [PROPOSAL] The proposal has no results. Its analysis plan (6.3) was: latency distribution per backend, packets per second,
 %   loss from sent versus received counts, bandwidth from Wireshark. Only the first two have a counterpart here; see the
 %   comparison table at the top of Experimental Method.
@@ -1219,7 +1265,7 @@ The last ladder state is left out of the corrected ladder plots and tables (Sect
 %     define it (e.g. first count with sustained gaps, or first failing state per run, 294 in ENet run 3) before writing.
 TODO: interpret the ladder results (latency, packet gaps, client limit, tick rate).
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 {\bfseries\small Test 1: progressive ladder, 10 to 299 clients (mean of 8 runs, 10~s per client count)\par}\vspace{4pt}
 \begin{tikzpicture}
@@ -1288,9 +1334,11 @@ TODO: interpret the ladder results (latency, packet gaps, client limit, tick rat
 \end{tikzpicture}
 \caption{Test 1, progressive ladder (granular batch, both patches applied; server on an e2-standard-2 VM, three n2-standard-4 client VMs, 10~s per client count; the 1-client warm-up state and the last state, 300 clients, are left out: the last state has no later state to time it by, so its counters cover a longer period than 10~s, see Section~\ref{sec:fixes}). Each line is the mean of 8 runs and the band spans the lowest to the highest run. The C++ server is driven by Godot UDP clients and the ENet server by Godot ENet clients. Ping is measured by the Godot client (time from its last send until a snapshot arrives), not a true round trip. Packet gaps are skipped snapshot numbers summed over all clients in a state. Dashed lines: 20 snapshots per second and the 18~Hz tick threshold.}
 \label{fig:ladder}
-\end{figure}
+\end{figure*}
 
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{Ladder results at selected client counts, summed up over 8 runs (10~s per state). Ping, Snap/s and Gaps show the mean and, in brackets, the lowest and highest run. Resp.\ = clients responding (mean); Ping = the Godot client's ping proxy; Snap/s = snapshots received per client per second; Gaps = skipped snapshot numbers in that state; Tick = server ticks per second; Srv CPU = server CPU.}
+\label{tab:ladder}
 \centering
 \small
 \setlength{\tabcolsep}{3pt}
@@ -1311,11 +1359,11 @@ ENet server & 250 & 100.0 & 33 (33--34) & 19.7 (19.5--19.8) & 38 (20--85) & 20.0
 ENet server & 299 & 100.0 & 37 (36--40) & 18.9 (18.4--19.1) & 145 (116--201) & 19.99 & 16.6 \\
 \bottomrule
 \end{tabular}
-\caption{Ladder results at selected client counts, summed up over 8 runs (10~s per state). Ping, Snap/s and Gaps show the mean and, in brackets, the lowest and highest run. Resp.\ = clients responding (mean); Ping = the Godot client's ping proxy; Snap/s = snapshots received per client per second; Gaps = skipped snapshot numbers in that state; Tick = server ticks per second; Srv CPU = server CPU.}
-\label{tab:ladder}
-\end{table}
+\end{table*}
 
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{Per run, over the ladder (291 states, 1 and 10 to 299 clients): states that met the health limits, snapshot gaps summed over all states, and the first client count (from 10 upward) at which a state failed (-- = none).}
+\label{tab:limit}
 \centering
 \small
 \begin{tabular}{@{}rrrrrrr@{}}
@@ -1333,16 +1381,14 @@ Run & Passed & Gaps & First fail & Passed & Gaps & First fail \\
 8 & 290 & 5 & -- & 291 & 4{,}710 & -- \\
 \bottomrule
 \end{tabular}
-\caption{Per run, over the ladder (291 states, 1 and 10 to 299 clients): states that met the health limits, snapshot gaps summed over all states, and the first client count (from 10 upward) at which a state failed (-- = none).}
-\label{tab:limit}
-\end{table}
+\end{table*}
 
 \subsection{Test 2, hold at 300 clients}
 \label{sec:hold300}
 % TODO: interpret the 300-client hold (latency, packet gaps, whether the tick rate dropped)
 TODO: interpret the 300-client hold.
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 {\bfseries\small Test 2: hold at 300 clients, 20 min (median of 8 runs)\par}\vspace{4pt}
 \begin{tikzpicture}
@@ -1411,14 +1457,14 @@ TODO: interpret the 300-client hold.
 \end{tikzpicture}
 \caption{Test 2, hold at 300 clients (server on an e2-standard-2 VM, three n2-standard-4 client VMs). The clients are added first (ramp-up, 10 clients every 10~s) and the plot starts when the last client has joined; it then covers the 20-minute hold with no new clients. Each line is the median of 8 runs and the band spans the 25th to the 75th percentile. Packet gaps are skipped snapshot numbers summed over all clients in a 10~s window. Ping is the Godot client's ping proxy, not a true round trip. Dashed lines: 20 snapshots per second and the 18~Hz tick threshold.}
 \label{fig:hold300}
-\end{figure}
+\end{figure*}
 
 \subsection{Test 2, hold at every target}
 \label{sec:holdall}
 % TODO: interpret the holds at 180, 260, 270 and 300 clients (which target is the first to show gaps or ping growth)
 TODO: interpret the holds at every target.
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 {\bfseries\small Test 2: hold at every target, gaps and latency (median of 8 runs)\par}\vspace{4pt}
 \begin{tikzpicture}
@@ -1503,9 +1549,11 @@ TODO: interpret the holds at every target.
 \end{tikzpicture}
 \caption{Test 2, packet gaps (left) and latency (right) during the 20-minute hold at 180, 260, 270 and 300 clients. Each line is the median of 8 runs and the band spans the 25th to the 75th percentile. Gaps are skipped snapshot numbers summed over all clients in a 10~s window.}
 \label{fig:holdall}
-\end{figure}
+\end{figure*}
 
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{Hold results at each target, from the 8 runs (C++ server with Godot clients; ENet server with ENet clients). Each run is first averaged over its 20-minute hold. Ping shows the median of the 8 run averages with the standard deviation in brackets. Gaps = skipped snapshot numbers summed over all clients and the whole hold: median with the lowest and highest run in brackets; ``\% of exp.'' is the median divided by the snapshots expected (clients $\times$ 20 per second $\times$ 1200~s). Cert.\ = certainty (percent) from the 8 run values: one minus the normalized fractional uncertainty (coefficient of variation divided by $\sqrt{8}$) raised to the scaling factor 0.4; n/a where the median is 0. Tick err.\ = absolute fractional error of the mean server tick rate against the 20~Hz baseline. Every run at every target responded at 100\% and received 20 snapshots per client per second (19.96 to 20.00). A run ``held'' if its hold averages met the health limits (at least 99\% responding, at least 18 snapshots per second, ping at most 150~ms, tick at least 18~Hz).}
+\label{tab:holdsum}
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
@@ -1524,9 +1572,7 @@ ENet server & 270 & 34.9 (0.2) & 91 & 4756 (3867--5031) & 0.0734 & 76 & 0.00 & 8
 ENet server & 300 & 36.9 (0.4) & 89 & 11391 (9659--14963) & 0.1582 & 70 & 0.00 & 8 of 8 \\
 \bottomrule
 \end{tabular}
-\caption{Hold results at each target, from the 8 runs (C++ server with Godot clients; ENet server with ENet clients). Each run is first averaged over its 20-minute hold. Ping shows the median of the 8 run averages with the standard deviation in brackets. Gaps = skipped snapshot numbers summed over all clients and the whole hold: median with the lowest and highest run in brackets; ``\% of exp.'' is the median divided by the snapshots expected (clients $\times$ 20 per second $\times$ 1200~s). Cert.\ = certainty (percent) from the 8 run values: one minus the normalized fractional uncertainty (coefficient of variation divided by $\sqrt{8}$) raised to the scaling factor 0.4; n/a where the median is 0. Tick err.\ = absolute fractional error of the mean server tick rate against the 20~Hz baseline. Every run at every target responded at 100\% and received 20 snapshots per client per second (19.96 to 20.00). A run ``held'' if its hold averages met the health limits (at least 99\% responding, at least 18 snapshots per second, ping at most 150~ms, tick at least 18~Hz).}
-\label{tab:holdsum}
-\end{table}
+\end{table*}
 
 \subsection{\texorpdfstring{\textcolor{red!70!black}{[SUPERSEDED] }}{[SUPERSEDED] }Example data}\label{sec:examples}
 \superseded
@@ -1535,7 +1581,8 @@ The tables below are real rows from our runs, to show what the data looks like.
 \paragraph{Progressive ladder: 8 runs summed up.}
 Each row sums up the 8 complete ladder runs at one client count: the mean, with the lowest and highest run in brackets. Resp. = clients responding (mean), Snap/s = snapshots received per client per second, Tick = server ticks per second, Passing = runs that met the health limits at that count.
 
-\begin{table}[H]
+\begin{table*}[!t]
+\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Example ladder rows, summed up over 8 runs (16--17 October, 10~s per state). Ping and Snap/s show the mean and, in brackets, the lowest and highest run.}
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
@@ -1550,8 +1597,7 @@ Godot ENet & 250 & 100.0 & 478 (46--942) & 14.4 (12.8--17.6) & 20.0 & 0 of 8 \\
 Godot ENet & 300 & 99.3 & 252 (50--1474) & 31.2 (28.2--35.8) & 20.0 & 3 of 8 \\
 \bottomrule
 \end{tabular}
-\caption{\textcolor{red!70!black}{\textbf{[Superseded]}} Example ladder rows, summed up over 8 runs (16--17 October, 10~s per state). Ping and Snap/s show the mean and, in brackets, the lowest and highest run.}
-\end{table}
+\end{table*}
 
 % TODO: confirm why (see next line)
 \noindent\textbf{One thing to note.} The ENet server's tick rate stays near 20~Hz even when its clients are failing, so for ENet the breakdown shows up as lost clients, low snapshot rate and high ping rather than a tick-rate drop. TODO: confirm why. The ENet server counts ticks from a Godot timer that fires every 50~ms without drift, so its tick counter keeps pace with the clock whether or not the work finished in time.
@@ -1559,7 +1605,7 @@ Godot ENet & 300 & 99.3 & 252 (50--1474) & 31.2 (28.2--35.8) & 20.0 & 3 of 8 \\
 \subsection{How the runs were summed up}
 Both tests combine 8 complete runs per backend. For the ladder, each of the 292 client counts is paired with the same count in the other runs. For the holds, each 10~s state is paired by its position in the ramp-up or hold. The mean, lowest and highest value of each measure are reported. A ladder run passes at a client count if that count met the health limits; a hold run held if its hold averages met them. Hold run 5 needed a second attempt; its first attempt is not used.
 
-\section{Discussion}
+\clearpage\section{Discussion}
 % [PROPOSAL] Sources: "Hypotheses and Goal Tree" (5.1), "Headless Mode and Engine Overhead", and the Aukstakalnis p.6 trade-off quote.
 %   Suggested points, in order:
 %   1. Hypotheses. H0: no significant difference in any metric at any client count. H1: comparable at low counts, a growing
