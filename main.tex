@@ -142,8 +142,12 @@ game networking, UDP, ENet, Godot, tick rate, server capacity, benchmarking
 %   up as gaps, not tick rate; see Table~\ref{tab:holdsum}). State H1 as the original prediction here, and say whether the data
 %   support it in the Discussion rather than in the introduction.
 % [CHECK] The proposal's time budget (240 minutes, 5 steps x 8 min x 3 reps) no longer applies; do not copy it.
-% TODO: write the introduction (problem, what this paper does, the questions) (see next line)
-TODO: write the introduction (problem, what this paper does, the questions).
+The Godot game engine ships with a built-in multiplayer API built on ENet, a UDP-based reliability library~\cite{aukstakalnis2024}, and also exposes PacketPeerUDP for connecting clients to custom servers over raw UDP~\cite{godotudp}. ENet provides remote procedure calls, scene synchronization, automatic packet reliability, and connection management out of the box, but its dedicated server runs as a full Godot engine instance~\cite{godotdedicated}, carrying overhead that pure networking may not require. A custom C++ UDP server eliminates that overhead and gives the developer full control, at the cost of manually reimplementing what ENet provides by default.
+
+The problem this paper addresses is the lack of a controlled comparison between these two backends in the context of a Godot client. Developers currently rely on assumptions, forum posts, and benchmarks from unrelated engines. We did not find a published study that isolates how Godot's ENet dedicated server performs against a C++ UDP server when both serve the same Godot client under identical workloads.
+
+This paper produces that comparison with three components: a custom C++ UDP server, a headless Godot ENet dedicated server, and a shared Godot client that can connect to either backend. A demo game, NodeStrike, provides a consistent network workload, and an automated benchmarking tool on Google Cloud scales the client count in controlled increments, up to 300 clients. We record and compare latency, packet handling (snapshots received per client per second and skipped snapshots), client capacity, and server tick rate across both backends.
+
 
 \section{Background and Related Work}
 % [PROPOSAL] Source: the whole "Literature Review" section. It has five topics plus a summary; the plan is to split them into
@@ -199,8 +203,38 @@ TODO: write the introduction (problem, what this paper does, the questions).
 % [CHECK] Nothing in this file uses \cite yet. The bibliography already has aukstakalnis2024, aldhief2018, jones2025,
 %   retunsky2023, godotdedicated, godotudp, unityticks, valvesource. Proposal references that are missing are listed at the
 %   bibliography at the end of this file.
-% TODO: write the background (servers and transport, related work) (see next line)
-TODO: write the background (servers and transport, related work).
+Multiplayer game networking is rarely visible to the player but plays a critical role in multiplayer communication. Multiplayer development is one of the more demanding areas of game development, requiring careful consideration of latency, scalability, and reliability. Two main options are available to developers building a multiplayer game with the Godot engine: the built-in ENet-based high-level networking system, or a custom UDP server backend.
+
+\subsection{Godot's ENet stack}
+The Godot engine has a built-in high-level multiplayer API; it is built on top of ENet, a UDP-based networking library. Aukstakalnis describes the resulting ENet-based peer-to-server architecture as one in which ``the game players interact with the client, while the server is a stripped-down version that updates the game to the clients''~\cite[p.~4]{aukstakalnis2024}. This is essentially a headless server, exported as a version of the Godot project that runs without audio or a graphical interface, leaving a process that runs game logic and relays state updates to clients. While this approach is simple and supports rapid early development, it later introduces architectural constraints, most notably that the server runs as an instance of the engine itself, carrying overhead that may not be needed for pure networking tasks.
+
+Aukstakalnis further notes that ENet provides convenient high-level abstractions such as remote procedure calls (RPCs), automatic packet reliability, and event-controlled callbacks such as on-connect and on-disconnect handlers~\cite{aukstakalnis2024}. According to the Godot Engine documentation on dedicated server exports, this headless mode is officially supported, but the developer must manage the game logic carefully to keep client-only code from running on the server. To handle this, Godot supports flags and arguments such as \texttt{-{}-server}, which tell the code to run in server mode~\cite{godotdedicated}. The Godot Engine documentation also describes a different route for developers who want to implement their own server: lower-level networking with raw UDP, TCP, or HTTP~\cite{godotudp}.
+
+A thesis from the DIVA portal examining server-client networking in Godot summarizes the trade-off well: ``Godot offers a high-level multiplayer API to facilitate the creation of multiplayer games in addition to supporting low-level networking via common protocols like UDP, TCP, HTTP, and SSL. Low-level networking is flexible and necessary for custom server implementations, but it usually takes much more time and knowledge to set up''~\cite[p.~6]{aukstakalnis2024}. This source provides the baseline that this paper quantifies: the convenience of ENet versus the possible performance gains of a custom low-overhead UDP server written in the mid-level systems language C++.
+
+\subsection{Transport protocol: TCP versus UDP}
+The selection between the User Datagram Protocol (UDP) and the Transmission Control Protocol (TCP) is fundamental to any discussion of multiplayer networking performance. Al-Dhief et al. provide a comparison and conclude that UDP exhibits significantly lower latency than TCP due to its connectionless, no-order delivery model~\cite[p.~173]{aldhief2018}. TCP carries built-in mechanics for packet retransmission, ordering, and congestion control, which retain data integrity and may be valuable for other applications but introduce significant delay in applications that must respond in real time.
+
+In the context of multiplayer games, the reliability that TCP provides is largely unnecessary. Most updates to game state, such as player positions, input events, and world state, are superseded by the next update. A retransmitted packet from a previous frame has no value if it arrives late. UDP is therefore the better choice for the real-time gameplay loop, with sequence numbering layered on top by the application where order matters. Jones reinforces this rationale by stating that UDP's low overhead makes it an ideal choice for fast, real-time applications where latency matters more than guaranteed delivery~\cite{jones2025}.
+
+\subsection{Implementation language for a custom server}
+There are many programming languages available for implementing a custom UDP server outside of the Godot engine. Retunsky's benchmarking study of low-level I/O performance across C, C++, Rust, Go, Java, and Python finds that the results can be grouped into two clusters: C, C++, and Rust as high-performance languages, and Rust, Go, Java, and Python as memory-safe languages~\cite{retunsky2023}. % [CHECK] Rust is in both clusters here; confirm this against Retunsky before submitting.
+This classification emphasizes a fundamental trade-off between raw execution speed and the safety assurances offered by higher-level languages.
+
+Arboleda, Arias, and Riveros add to this analysis by showing that C++ is materially more efficient than Python for parallel, I/O-bound workloads. This finding supports C++ as a strong choice for a high-performance game server expected to handle multiple clients simultaneously~\cite[p.~8]{arboleda2023}. Zehra et al. reach a similar conclusion in a memory and time comparison between C++ and Python~\cite{zehra2020}. There are also many available resources for learning how to set up a C++ UDP server. For example, GeeksforGeeks publishes a tutorial on UDP server-client implementation in C++ that demonstrates the basic socket workflow and indicates that setting up a server with C++ socket libraries is not as difficult as it might first appear, providing a useful comparison point against ENet implementations~\cite{geeksforgeeks2018}.
+
+\subsection{Network topology}
+How the network is designed plays an important role in how it functions; network topology in a multiplayer game can affect performance characteristics and scalability. \c{C}elik and Se\c{c}inti examine peer-to-peer implementations and client-server topologies in the context of a multiplayer game. Their findings indicate that peer-to-peer implementations carry significant issues with synchronization, cheating, and latency, and that they constrain achievable client limits~\cite[p.~48]{celik2024}. In a dedicated server topology, or client-server arrangement, all clients communicate independently with the server, which determines the game state. This arrangement is preferred for more competitive multiplayer experiences.
+
+Ahde's thesis on real-time multiplayer server implementation in Unity provides a practical examination of dedicated server design: on one hand a server that handles the logic and processing, and on the other a server that handles the bandwidth and traffic management~\cite[p.~22]{ahde2017}. This paper adopts the dedicated-server topology in its simplest form, with one server process serving all connected clients.
+
+\subsection{Packet loss, buffer bloat, and heartbeats}
+Latency in a UDP server is not a single number but a distribution that depends on how the server's receive queue is managed under load. When packets arrive faster than the application can drain the socket buffer, queuing delay grows, and eventually new packets are dropped at the kernel level rather than enqueued. Excessive buffering, known as buffer bloat, is a documented cause of high latency under load~\cite{gettys2011}.
+% [CHECK] Removed from the proposal text because its sources were weak (Raysync vendor blog, untraceable Substack post): "Industry analyses describe this progression through three regimes, idle, filling, and bloated, with median latency rising sharply as buffer occupancy approaches saturation." Put it back only with a citable source.
+Another concern is detecting silent client disconnections; UDP's connectionless nature means the server cannot distinguish between a client that has stopped sending and one whose network has dropped. To address this, the standard architectural mitigation is a heartbeat mechanism: each client transmits a small, periodic packet, and the server evicts any client from which no heartbeat has been received within a predefined, configurable timeout.
+
+\subsection{Summary}
+The literature reviewed here establishes a foundation for this paper: a comparison of a custom C++ UDP server backend against Godot's built-in ENet dedicated server implementation. The existing body of work confirms that UDP is the appropriate transport protocol for real-time multiplayer games, that C++ offers a measurable performance advantage over higher-level languages for server-side I/O tasks, and that Godot's ENet system, while functional and convenient, carries architectural constraints inherent to its design as a stripped-down game engine instance. Together, these sources provide the theoretical grounding necessary to design, implement, and benchmark both server variants against consistent metrics of latency, packet handling, and client capacity.
 
 \subsection{Ticks and snapshots}
 % [PROPOSAL] The proposal never defines a tick or a snapshot. It only says the C++ server "broadcasts authoritative state to all
@@ -302,8 +336,81 @@ information and clients see worse ping and more gaps.}
 %     that gets collected. Describe what the code does, and say briefly that the game was simplified from the proposal.
 %   - The reason for keeping the game this simple is already in the proposal: minimal game logic so the difference between
 %     backends is the networking, not the game. Keep that sentence.
-% TODO: write how the Godot client and the Godot ENet server were built (goals, design decisions, problems you hit) (see next line)
-TODO: write how the Godot client and the Godot ENet server were built (goals, design decisions, problems you hit).
+\subsection{System architecture}
+The benchmark consists of three software components and one instrument layer. The first component is the shared Godot client, which implements both an ENet transport path using the built-in \texttt{ENetMultiplayerPeer} class and a raw UDP transport path using the \texttt{PacketPeerUDP} class. The client emits NodeStrike player state upstream and applies authoritative game state received downstream. The second component is the Godot ENet headless dedicated server, which is the same Godot project started in the server role without a window, running NodeStrike server logic and managing connections through ENet. The third component is the custom C++ UDP dedicated server, which binds a UDP socket on a configurable port, maintains a client registry indexed by IP and port, and broadcasts authoritative state to all registered clients on a fixed tick interval (Fig.~\ref{fig:arch}).
+
+\begin{figure}[H]
+\centering
+\begin{adjustbox}{max width=\columnwidth}
+\begin{tikzpicture}[font=\scriptsize,
+  layer/.style={fill=black!70,text=white,rounded corners=2pt,minimum width=3.4cm,minimum height=0.5cm,align=center},
+  srv/.style={draw,rounded corners=4pt,thick,minimum width=3.8cm,minimum height=3.6cm},
+  cli/.style={draw,rounded corners=3pt,thick,minimum width=1.7cm,minimum height=0.6cm,align=center},
+  arr/.style={<->,thick}]
+\begin{scope}
+\node[srv] at (0,0) {};
+\node[font=\footnotesize] at (0,1.55) {C++ UDP server};
+\node[layer] at (0,0.8) {UDP socket $\rightarrow$ bind};
+\node[layer] at (0,0.15) {minimal game logic};
+\node[layer] at (0,-0.5) {client registry map};
+\node[layer] at (0,-1.15) {sendto};
+\node[cli] at (-0.95,-3.2) {Godot client};
+\node[cli] at (0.95,-3.2) {Godot client};
+\draw[arr] (-0.95,-1.8) -- (-0.95,-2.9);
+\draw[arr] (0.95,-1.8) -- (0.95,-2.9);
+\node[fill=white,inner sep=1pt] at (0,-2.35) {UDP datagrams};
+\node at (0,-3.85) {\texttt{PacketPeerUDP}};
+\end{scope}
+\begin{scope}[xshift=4.5cm]
+\node[srv] at (0,0) {};
+\node[font=\footnotesize] at (0,1.55) {ENet headless server};
+\node[layer] at (0,0.8) {\texttt{ENetMultiplayerPeer}};
+\node[layer] at (0,0.15) {NodeStrike server logic};
+\node[layer] at (0,-0.5) {connection manager};
+\node[layer] at (0,-1.15) {authoritative tick};
+\node[cli] at (-0.95,-3.2) {Godot client};
+\node[cli] at (0.95,-3.2) {Godot client};
+\draw[arr] (-0.95,-1.8) -- (-0.95,-2.9);
+\draw[arr] (0.95,-1.8) -- (0.95,-2.9);
+\node[fill=white,inner sep=1pt] at (0,-2.35) {ENet packets};
+\node at (0,-3.85) {\texttt{ENetMultiplayerPeer}};
+\end{scope}
+\end{tikzpicture}
+\end{adjustbox}
+\caption{The two backends under test and the shared Godot client. The same client script talks to the C++ server over raw UDP and to the Godot ENet server through ENet.}
+\label{fig:arch}
+\end{figure}
+
+The instrumentation layer exists independently of the two backends under test. It is comprised of a per-client benchmarking logger that records packet counts, skipped snapshot numbers and ping for each test state, per-second server telemetry and per-VM CPU, memory and network use, and a Python runner that creates the Google Cloud machines and scales the population of headless Godot clients in controlled increments (Fig.~\ref{fig:fleet}).
+
+\subsection{Classes and components}
+\begin{table}[H]
+\caption{Classes and components used by the two backends.}
+\label{tab:classes}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.37\columnwidth}>{\raggedright\arraybackslash}p{0.16\columnwidth}>{\raggedright\arraybackslash}p{0.37\columnwidth}}
+\toprule
+Classes & Side & Purpose \\
+\midrule
+\texttt{ENetMultiplayerPeer} & ENet backend & ENet connection used as the multiplayer peer (server and ENet clients) \\
+\texttt{MultiplayerAPI} & ENet backend & handles \texttt{@rpc} calls and peer connect and disconnect events \\
+\texttt{PacketPeerUDP} & Shared client & sends and receives raw UDP packets from the Godot client \\
+\texttt{socket}, \texttt{bind}, \texttt{recvfrom}, \texttt{sendto} & C++ backend & POSIX socket calls used to create the UDP listener, accept packets, and broadcast state \\
+Client registry & C++ backend & in-memory map from client IP and port to player state, used to track connected clients and the time each was last heard from \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What was built from scratch}
+What was made from scratch in this project:
+\begin{itemize}
+\item A C++ UDP server with a single-threaded receive loop, client registry, fixed-tick state broadcast, silence-based eviction, and a binary packet format for player state and authoritative snapshots.
+\item A Python runner that creates the Google Cloud machines, scales headless Godot client instances in controlled increments, and aggregates per-client metrics from each instance.
+\item A shared Godot client capable of switching between the ENet transport path and the raw UDP transport path with no changes to NodeStrike game logic.
+\item The NodeStrike demo game itself, including a grid map, bot logic for client-side movement toward a goal tile, and minimal client-side rendering for verification.
+\end{itemize}
 
 \paragraph{Notes from the code (delete when written).}
 \begin{itemize}
@@ -332,6 +439,9 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \end{tikzpicture}\end{adjustbox}
 \caption{The Godot project. One script is started in different modes. A UDP client talks to the separate C++ server; an ENet client talks to the same project started as an ENet server.}
 \end{figure}
+
+\subsection{The NodeStrike workload}
+NodeStrike is a small grid game intended to produce a consistent and easy-to-scale network workload. Players spawn on a 20$\times$20 grid map. Each client is a bot that picks a goal tile and moves toward it one tile per 20~Hz tick; on reaching the goal it picks a new one. The game requires only two pieces of synchronized state per tick: the position of every player and the goal tile of every player. The bot's only output is its own position and goal. This minimizes the complexity of the network behavior and simplifies the game so that it is easier to measure performance between backends rather than the game logic.
 
 \definecolor{nsbg}{RGB}{72,72,72}
 \definecolor{nsgrid}{RGB}{56,56,56}
@@ -508,35 +618,9 @@ TODO: write how the Godot client and the Godot ENet server were built (goals, de
 \node[font=\scriptsize,gray,anchor=north west,text width=15.5cm] at (-1.4,-6.3) {The ENet and Godot header sizes are not measured here. The C++ server sends the same snapshot with its own 16-byte header directly after UDP.};
 \end{tikzpicture}
 \caption{How one snapshot is packed (ENet backend, default binary format). The server writes the header and then one 12-byte block per player into one byte array with \texttt{encode\_u32}/\texttt{encode\_u16} and sends it as a remote procedure call. The client reads the same positions back with \texttt{decode\_u32}/\texttt{decode\_u16}. The alternative \texttt{--enet-snapshot=variant} sends the same rows as a list of dictionaries, with the keys \texttt{id, x, y, gx, gy} sent as text each time.}
+\label{fig:snapshot}
 \end{figure*}
 
-\newcommand{\draftmark}{\textcolor{red!70!black}{\textbf{[DRAFT]}}}
-
-\noindent\textbf{\draftmark{} The snapshot code.}\par\nobreak
-\begin{figure}[H]
-\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
-func _broadcast_binary_enet_tick() -> void:
-    var player_ids := remote_players.keys()
-    var player_count := mini(player_ids.size(), 0xffff)
-    var packet := PackedByteArray()
-    packet.resize(16 + player_count * 12)
-    packet.encode_u32(0, tick_count)        # bytes 0-3: tick number
-    packet.encode_u16(4, player_count)      # bytes 4-5: players
-    packet[6] = 1 if h_overlay_active else 0
-    packet[7] = ENET_SNAPSHOT_VERSION       # byte 7: version
-    for i in range(player_count):           # bytes 8-15 stay 0
-        var pid := int(player_ids[i])
-        var player: Dictionary = remote_players[pid]
-        var offset := 16 + i * 12
-        packet.encode_u32(offset, pid)
-        packet.encode_u16(offset + 4, int(player.get("x", 0)))
-        packet.encode_u16(offset + 6, int(player.get("y", 0)))
-        packet.encode_u16(offset + 8, int(player.get("gx", 0)))
-        packet.encode_u16(offset + 10, int(player.get("gy", 0)))
-    rpc("receive_binary_snapshot", packet)
-\end{lstlisting}
-\caption{\draftmark{} The ENet server packs the player table into one byte array and sends it to every client (excerpt of \texttt{main.gd}, constants written out as numbers and the statistics counter left out).}
-\end{figure}
 
 
 
@@ -556,9 +640,64 @@ func _broadcast_binary_enet_tick() -> void:
 %     notes below say the check happens once per tick; describe the code, not the proposal.
 %   - "Problems you hit" (asked for in the TODO) already exists in this file: the tick drift (Section~\ref{sec:fixes}). Summarize
 %     it here in two sentences and point there.
-% TODO: write how the C++ server was built (goals, design decisions, problems you hit) (see next line)
-TODO: write how the C++ server was built (goals, design decisions, problems you hit).
-%TODO write how the C++ server was built (goals, design decisions, problems you hit
+\subsection{Packet format}
+The custom C++ UDP service uses a format that defines how each packet is parsed and delivered. Each packet begins with a one-byte message type and a one-byte protocol version, followed by a payload that depends on the type of data being sent (Table~\ref{tab:packets} and Fig.~\ref{fig:msgs}). JOIN is sent by a client requesting to join, and the server answers with an ACK that carries the player id. STATE is sent by a connected client every tick with its position, a timestamp, a sequence number, and its goal tile. TICK is the snapshot that the server broadcasts to every client: a 16-byte header followed by 12 bytes (id, position and goal) for each player, split into datagrams of at most 1,200 bytes. No separate INPUT, HEARTBEAT, or DISCONNECT message is used: the STATE message sent every tick already tells the server that the client is alive, and a client that goes silent is evicted by timeout. In contrast to this custom approach, the ENet transport path utilizes Godot's native packet serialization, and its snapshot is a byte array of the same size. While this methodology diverges from the custom C++ implementation, it maintains a degree of functional equivalence sufficient for the comparative requirements of the benchmark.
+
+\begin{figure}[H]
+\centering
+\begin{adjustbox}{max width=\columnwidth}
+\begin{tikzpicture}[x=0.36cm,y=1cm,font=\scriptsize,
+  cell/.style={draw,minimum height=0.6cm,inner sep=0pt,align=center,font=\tiny}]
+\node[anchor=east] at (-0.3,0) {\textbf{JOIN}};
+\node[cell,fill=gray!30,minimum width=0.4cm] at (0.5,0) {t};
+\node[cell,fill=gray!30,minimum width=0.4cm] at (1.5,0) {v};
+\node[anchor=west,font=\tiny] at (2.4,0) {2 B};
+\node[anchor=east] at (-0.3,-0.85) {\textbf{ACK}};
+\node[cell,fill=gray!30,minimum width=0.4cm] at (0.5,-0.85) {t};
+\node[cell,fill=gray!30,minimum width=0.4cm] at (1.5,-0.85) {v};
+\node[cell,fill=yellow!25,minimum width=1.6cm] at (3.0,-0.85) {id \texttt{u32}};
+\node[anchor=west,font=\tiny] at (4.9,-0.85) {6 B};
+\node[anchor=east] at (-0.3,-1.7) {\textbf{STATE}};
+\node[cell,fill=gray!30,minimum width=0.4cm] at (0.5,-1.7) {t};
+\node[cell,fill=gray!30,minimum width=0.4cm] at (1.5,-1.7) {v};
+\node[cell,fill=green!15,minimum width=0.8cm] at (3.0,-1.7) {x};
+\node[cell,fill=green!15,minimum width=0.8cm] at (5.0,-1.7) {y};
+\node[cell,fill=blue!12,minimum width=1.6cm] at (7.0,-1.7) {timestamp};
+\node[cell,fill=blue!12,minimum width=1.6cm] at (11.0,-1.7) {number};
+\node[cell,fill=orange!15,minimum width=0.8cm] at (15.0,-1.7) {gx};
+\node[cell,fill=orange!15,minimum width=0.8cm] at (17.0,-1.7) {gy};
+\node[anchor=west,font=\tiny] at (18.5,-1.7) {18 B};
+\node[font=\tiny,gray,anchor=west,align=left] at (0,-2.5) {t = type (1 B), v = version (1 B); x, y, gx, gy: 2 B each;\\timestamp, number: 4 B each};
+\end{tikzpicture}
+\end{adjustbox}
+\caption{Messages sent upstream (JOIN, STATE) and the acknowledgement (ACK) of the C++ server protocol. The snapshot (TICK) layout is shown in Fig.~\ref{fig:snapshot}.}
+\label{fig:msgs}
+\end{figure}
+
+\subsection{Heartbeat and client eviction}
+To address the challenge of silent disconnections, the server records a high-resolution timestamp for each client every time it receives a message from it. A client sends its state every tick (20 times per second), so this also serves as the heartbeat. Once per tick, the server compares the current system time against the last-seen timestamp of every registered client, evicting any client whose silence exceeds a predefined threshold. This timeout is set to five seconds to maintain functional equivalence with the ENet server, ensuring that connection management remains comparable across both backends (Fig.~\ref{fig:evict}).
+
+\begin{figure}[H]
+\centering
+\begin{adjustbox}{max width=\columnwidth}
+\begin{tikzpicture}[font=\scriptsize,
+  lab/.style={draw,rounded corners=2pt,minimum width=1.2cm,minimum height=0.5cm}]
+\node[lab] at (0,1) {Client};
+\node[lab] at (0,0) {Server};
+\draw (0.8,1) -- (8.4,1);
+\draw (0.8,0) -- (8.4,0);
+\foreach \x in {1.2,1.6,2.0,2.4} {\draw[dotted,thick] (\x,1.3) -- (\x,-0.3); \node[draw,fill=black!70,text=white,font=\tiny,inner sep=1.5pt] at (\x,1.45) {STATE};}
+\node[draw,dashed,fill=gray!15,minimum width=3.4cm,minimum height=0.5cm] at (5.0,1) {silence $>$ 5 s};
+\node[draw,dashed,fill=gray!15,minimum width=3.4cm,minimum height=0.5cm] at (5.0,0) {waiting\dots};
+\draw[dotted,thick] (6.7,0.3) -- (6.7,-0.4);
+\node[draw,rounded corners=2pt,align=center,minimum width=1.6cm] at (6.7,-0.9) {evict client};
+\node[font=\tiny] at (1.8,-0.55) {$t=0$};
+\node[font=\tiny] at (6.7,-0.5) {$t=5$ s};
+\end{tikzpicture}
+\end{adjustbox}
+\caption{Eviction by silence (schematic). Every STATE message resets the server's last-seen time for that client; a client silent for more than 5 seconds is removed.}
+\label{fig:evict}
+\end{figure}
 
 \paragraph{Notes from the code (delete when written).}
 \begin{itemize}
@@ -680,6 +819,30 @@ second. Ping is how long it takes to hear back; a lost reply shows up as a missi
 number. The ENet backend does the same thing through Godot's own networking.}
 \label{fig:flow}
 \end{figure*}
+
+\subsection{Headless mode and engine overhead}
+Both servers run headless on a Google Cloud machine. In a normal Godot client, the engine runs five subsystems: rendering, audio, physics, game logic, and networking. In headless mode, rendering and audio are disabled, but physics, game logic, and networking continue to execute inside the engine process (Fig.~\ref{fig:headless}). The custom C++ UDP server runs only the networking layer and the minimum game logic required to maintain authoritative state. This difference in engine overhead is precisely what the benchmark is designed to characterize.
+
+\begin{figure}[H]
+\centering
+\begin{adjustbox}{max width=\columnwidth}
+\begin{tikzpicture}[font=\scriptsize,
+  on/.style={fill=black!75,text=white,rounded corners=2pt,minimum width=3.6cm,minimum height=0.6cm,align=center},
+  off/.style={draw,thick,fill=white,text=black!50,rounded corners=2pt,minimum width=3.6cm,minimum height=0.6cm,align=center}]
+\node[font=\footnotesize\bfseries] at (0,2.2) {Godot client};
+\node[font=\footnotesize\bfseries] at (4.2,2.2) {Headless server};
+\foreach \y/\a/\b in {1.5/Rendering/{draws the game to screen},0.8/Audio/{plays sounds and music},0.1/Physics/{simulates the world},-0.6/{Game logic}/{scripts, scene tree},-1.3/Networking/{\texttt{ENetMultiplayerPeer}}} {
+  \node[on] at (0,\y) {\textbf{\a}\\[-1pt]{\tiny\b}};}
+\node[off] at (4.2,1.5) {\textbf{Rendering}\\[-1pt]{\tiny off}};
+\node[off] at (4.2,0.8) {\textbf{Audio}\\[-1pt]{\tiny off}};
+\node[on] at (4.2,0.1) {\textbf{Physics}\\[-1pt]{\tiny still runs}};
+\node[on] at (4.2,-0.6) {\textbf{Game logic}\\[-1pt]{\tiny still runs}};
+\node[on] at (4.2,-1.3) {\textbf{Networking}\\[-1pt]{\tiny \texttt{ENetMultiplayerPeer}}};
+\end{tikzpicture}
+\end{adjustbox}
+\caption{What the Godot engine runs in a normal client and in headless mode. The C++ server runs only a networking layer and the minimum game logic.}
+\label{fig:headless}
+\end{figure}
 
 \subsection{One tick, step by step}
 Every 50~ms the server does the same five things, in this order. If steps 1 to 4
@@ -1175,43 +1338,6 @@ while (true) {
 \label{lst:fixed}
 \end{figure}
 
-\newcommand{\hl}[2]{\colorbox{#1}{\strut#2}}
-\begin{figure*}[!t]
-\centering
-\begin{minipage}[t]{0.48\textwidth}
-\textbf{\small Before (Section~\ref{sec:codebehind}): stopwatch}\par\smallskip
-\begin{lstlisting}[language=C++,basicstyle=\ttfamily\scriptsize,escapechar=|,frame=none]
-|\hl{yellow!40}{wait\_for\_packets(5 ms);}|
-now = Clock::now();
-|\hl{yellow!40}{if (now - last\_tick >= tick) \{}|
-    |\hl{red!30}{last\_tick = now;}|
-    tick_n++;
-    // drop silent clients,
-    // broadcast snapshots
-}
-\end{lstlisting}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}
-\textbf{\small After (Section~\ref{sec:thefix}): timetable}\par\smallskip
-\begin{lstlisting}[language=C++,basicstyle=\ttfamily\scriptsize,escapechar=|,frame=none]
-|\hl{yellow!40}{wait\_until(next\_tick, 5 ms);}|
-now = Clock::now();
-|\hl{yellow!40}{if (now >= next\_tick) \{}|
-    |\hl{green!30}{next\_tick += tick;}|
-    |\hl{green!30}{if (next\_tick <= now)}|
-    |\hl{green!30}{    next\_tick = now + tick;}|
-    tick_n++;
-    // drop silent clients,
-    // broadcast snapshots
-}
-\end{lstlisting}
-\end{minipage}
-\par\smallskip
-{\small\colorbox{red!30}{\strut~removed~}\quad\colorbox{yellow!40}{\strut~changed~}\quad\colorbox{green!30}{\strut~new~}}
-\caption{The old and the fixed tick loop side by side (simplified from Figs.~\ref{lst:tick} and~\ref{lst:fixed}). The red line is the one that causes the drift: it restarts the stopwatch at the moment the tick was noticed. The green lines schedule the next tick from the previous due time, and resynchronize if the server falls a whole tick behind.}
-\label{lst:diff}
-\end{figure*}
-
 \subsubsection{Result of the fix}
 In a 30-second local test the original server ticked at 19.67~Hz and the fixed server at 20.000~Hz. How this changes the cloud results will be reported with the corrected runs.
 
@@ -1637,19 +1763,19 @@ TODO.
 
 \begin{thebibliography}{99}
 \bibitem{aukstakalnis2024} L. Aukstakalnis, ``Server-client networking implementation using the Godot game engine,'' 2024.
+\bibitem{godotudp} Godot Foundation, ``UDPServer,'' \emph{Godot Engine Documentation}, 2026. [Online]. Available: \url{https://docs.godotengine.org/en/4.4/classes/class_udpserver.html}. Accessed: Feb. 27, 2026.
+\bibitem{godotdedicated} Godot Foundation, ``Exporting for dedicated servers,'' \emph{Godot Engine Documentation}, 2026. [Online]. Available: \url{https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_dedicated_servers.html}. Accessed: Feb. 27, 2026.
 \bibitem{aldhief2018} F. T. Al-Dhief \emph{et al.}, ``Performance comparison between TCP and UDP protocols in different simulation scenarios,'' \emph{Int. J. Eng. Technol.}, vol. 7, no. 4.36, pp. 172--176, 2018.
 \bibitem{jones2025} C. Jones, ``Go UDP programming: A beginner-friendly guide to building fast, real-time apps,'' \emph{DEV Community}, Oct. 29, 2025. [Online]. Available: \url{https://dev.to/jones_charles_ad50858dbc0/go-udp-programming-a-beginner-friendly-guide-to-building-fast-real-time-apps-4ik}. Accessed: Feb. 27, 2026.
 \bibitem{retunsky2023} E. Retunsky, ``Benchmarking low-level I/O: C, C++, Rust, Golang, Java, Python,'' \emph{Star Gazers}, Mar. 26, 2023. [Online]. Available: \url{https://medium.com/star-gazers/benchmarking-low-level-i-o-c-c-rust-golang-java-python-9a0d505f85f7}
-\bibitem{godotdedicated} Godot Foundation, ``Exporting for dedicated servers,'' \emph{Godot Engine Documentation}, 2026. [Online]. Available: \url{https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_dedicated_servers.html}. Accessed: Feb. 27, 2026.
-\bibitem{godotudp} Godot Foundation, ``UDPServer,'' \emph{Godot Engine Documentation}, 2026. [Online]. Available: \url{https://docs.godotengine.org/en/4.4/classes/class_udpserver.html}. Accessed: Feb. 27, 2026.
-\bibitem{ahde2017} J. Ahde, ``Real-time Unity multiplayer server implementation,'' B.S. thesis, 2017.
 \bibitem{arboleda2023} F. J. M. Arboleda, M. R. Arias, and J. A. H. Riveros, ``Performance of parallelism in Python and C++,'' \emph{IAENG Int. J. Comput. Sci.}, vol. 50, no. 2, pp. 1--13, 2023.
-\bibitem{celik2024} A. D. \c{C}elik and G. \c{S}e\c{c}inti, ``Network optimizing software solution for multiplayer gaming,'' \emph{ITU J. Wireless Commun. Cybersecurity}, vol. 1, no. 1, pp. 47--56, 2024.
-\bibitem{geeksforgeeks2018} GeeksforGeeks, ``UDP server-client implementation in C++,'' Mar. 22, 2018. [Online]. Available: \url{https://www.geeksforgeeks.org/cpp/udp-server-client-implementation-c/}
 \bibitem{zehra2020} F. Zehra, M. Javed, D. Khan, and M. Pasha, ``Comparative analysis of C++ and Python in terms of memory and time,'' \emph{Preprints}, 2020, doi: 10.20944/preprints202012.0516.v1.
+\bibitem{geeksforgeeks2018} GeeksforGeeks, ``UDP server-client implementation in C++,'' Mar. 22, 2018. [Online]. Available: \url{https://www.geeksforgeeks.org/cpp/udp-server-client-implementation-c/}
+\bibitem{celik2024} A. D. \c{C}elik and G. \c{S}e\c{c}inti, ``Network optimizing software solution for multiplayer gaming,'' \emph{ITU J. Wireless Commun. Cybersecurity}, vol. 1, no. 1, pp. 47--56, 2024.
+\bibitem{ahde2017} J. Ahde, ``Real-time Unity multiplayer server implementation,'' B.S. thesis, 2017.
+\bibitem{gettys2011} J. Gettys and K. Nichols, ``Bufferbloat: Dark buffers in the Internet,'' \emph{ACM Queue}, vol. 9, no. 11, 2011.
 \bibitem{unityticks} Unity Technologies, ``Ticks and update rates,'' \emph{Netcode for GameObjects 2.5 Manual}. [Online]. Available: \url{https://docs.unity3d.com/Packages/com.unity.netcode.gameobjects@2.5/manual/learn/ticks-and-update-rates.html}
 \bibitem{valvesource} Valve Developer Community, ``Source multiplayer networking.'' [Online]. Available: \url{https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking}
-\bibitem{gettys2011} J. Gettys and K. Nichols, ``Bufferbloat: Dark buffers in the Internet,'' \emph{ACM Queue}, vol. 9, no. 11, 2011.
 \bibitem{claypool2006} M. Claypool and K. Claypool, ``Latency and player actions in online games,'' \emph{Commun. ACM}, vol. 49, no. 11, pp. 40--45, Nov. 2006.
 \bibitem{bernier2001} Y. W. Bernier, ``Latency compensating methods in client/server in-game protocol design and optimization,'' presented at the Game Developers Conf., 2001.
 \bibitem{rfc768} J. Postel, ``User datagram protocol,'' IETF, RFC 768, Aug. 1980.
